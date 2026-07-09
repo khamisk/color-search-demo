@@ -1,0 +1,498 @@
+{
+  "version": 1,
+  "animals": {
+    "35e43936501612d6": {
+      "sourceRelPath": "Abudefdufsaxatilis_Sergeantmajor.png",
+      "sourceHash": "9346a6b90531c490360f01218a1353062351f213d2b6d50c4fffe0e8256256a4",
+      "processedRelPath": "data/processed/35e43936501612d6.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#202B3A",
+        "#514E3F",
+        "#203F6A",
+        "#FFE404"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:06.487Z",
+      "colorSource": "auto",
+      "error": null
+    },
+    "097fd93490f2d0cf": {
+      "sourceRelPath": "Acanthastreaechinata_Starrycupcoral_GettyImages-1338666302.png",
+      "sourceHash": "2411785d1e13835ffb51ae452177966df99a5ecbea40dc3041e00a82a7d5dcb1",
+      "processedRelPath": "data/processed/097fd93490f2d0cf.png",
+      "backgroundModel": "gemini-flash",
+      "backgroundModelName": "gemini-3.1-flash-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.067,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#220D0A",
+        "#532204",
+        "#050684",
+        "#390D3B"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:07:51.724Z",
+      "colorSource": "auto",
+      "error": null
+    },
+    "4c71f3fb1a2a70a6": {
+      "sourceRelPath": "Acanthogorgiasp._Blueberrygorgonian.png",
+      "sourceHash": "53bc4706cfa4c9d9360ff2fbe8dd75c819adf43436f7d54493c98fea1aade092",
+      "processedRelPath": "data/processed/4c71f3fb1a2a70a6.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#546C83",
+        "#9B8454",
+        "#6B8284"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:06.676Z",
+      "colorSource": "auto",
+      "error": null
+    },
+    "3a5a3ee74f56ad75": {
+      "sourceRelPath": "Acanthophylliadeshayesiana_Doughnutcoral.png",
+      "sourceHash": "1bc2d6132ea1f81e947bdd7a4f352ebb891554a0dee525ed71104ec90bbc8197",
+      "processedRelPath": "data/processed/3a5a3ee74f56ad75.png",
+      "backgroundModel": "gemini-flash",
+      "backgroundModelName": "gemini-3.1-flash-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.067,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#220A0C",
+        "#6A3B3D",
+        "#84556A",
+        "#B7C8F7"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:06.785Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "153cd98b8b622d9b": {
+      "sourceRelPath": "Acanthophylliasp._Cupcoral.png",
+      "sourceHash": "e840972d6ce4f7fdf302172fcb2b899dd06d73abe8d0c0d6eb61423a9109f288",
+      "processedRelPath": "data/processed/153cd98b8b622d9b.png",
+      "backgroundModel": "gemini-flash",
+      "backgroundModelName": "gemini-3.1-flash-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.067,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#6D3A24",
+        "#815751",
+        "#994F29",
+        "#714D27"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:06.868Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "e209daf3b08200fb": {
+      "sourceRelPath": "Acanthosauracapra_Mountainhorneddragon.png",
+      "sourceHash": "06e897a242854a6ca5b4ceaaed32a0abbfdb98be70ed51582b0b14a905c27f24",
+      "processedRelPath": "data/processed/e209daf3b08200fb.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#836B53",
+        "#B39C81",
+        "#533B26",
+        "#B7B283"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:06.931Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "778cd954deda76f3": {
+      "sourceRelPath": "Acanthoscurriageniculata_Brazilianwhitekneetarantula.png",
+      "sourceHash": "3e519a8464948d2c02a09014ae134807e53ccf6d7253e5d8aea437ac3605d7e5",
+      "processedRelPath": "data/processed/778cd954deda76f3.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#9B6A54",
+        "#563527",
+        "#9B8682",
+        "#24120C"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.037Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "fd9e3c58dff92a8f": {
+      "sourceRelPath": "Acanthostracionpolygonius_Honeycombcowfish.png",
+      "sourceHash": "83b55d90c77fd840b5423a486bbaf6fa7747634f57836a4e02afb7e7983c27d7",
+      "processedRelPath": "data/processed/fd9e3c58dff92a8f.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#836C54",
+        "#6C8383",
+        "#857F6D",
+        "#3D536A"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.104Z",
+      "colorSource": "auto",
+      "error": null
+    },
+    "dcea46271484d4df": {
+      "sourceRelPath": "Acanthurusachilles_Achillestang.png",
+      "sourceHash": "302f7cedce23baff8fbfb0f645011b7a943ccbb16ca98882f12bf5ba5854f451",
+      "processedRelPath": "data/processed/dcea46271484d4df.png",
+      "colors": [
+        "#050509",
+        "#242338",
+        "#533D3A",
+        "#FB9C41"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.144Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "04b35970b6c4f649": {
+      "sourceRelPath": "Acanthurusbahianus_Oceansurgeonfish.png",
+      "sourceHash": "d0229b707a2f6238f5cf0e2da9b2c69464effa263f848a1553462c6028aa0809",
+      "processedRelPath": "data/processed/04b35970b6c4f649.png",
+      "colors": [
+        "#CBCAB6",
+        "#062751",
+        "#6E8184",
+        "#092950"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.244Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "7e69b8df5d097b87": {
+      "sourceRelPath": "Acanthuruschirurgus_Doctorfish.png",
+      "sourceHash": "5255bef97edcf4dd2b7c216b41d6831d414d2889b2a8d1be9676ffd27185fab3",
+      "processedRelPath": "data/processed/7e69b8df5d097b87.png",
+      "colors": [
+        "#E1E1E1",
+        "#687081",
+        "#3D526B",
+        "#0654B6"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.342Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "7779357c88df485d": {
+      "sourceRelPath": "Acanthuruscoeruleus_Bluetang.png",
+      "sourceHash": "1315d57cb789f770341e668dfbf6cd3e9041c67eca80670cee63099af2f1ec65",
+      "processedRelPath": "data/processed/7779357c88df485d.png",
+      "colors": [
+        "#B4B7C9",
+        "#869AB1",
+        "#5684CB"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.425Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "f67ec4f17cf60650": {
+      "sourceRelPath": "Acanthurusguttatus_Mustardtang.png",
+      "sourceHash": "7f5bf8c8d4dd4557398cc2fbf00974d99dfa74ae053993d1320cf628d9b439bf",
+      "processedRelPath": "data/processed/f67ec4f17cf60650.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#887E6E",
+        "#545652",
+        "#26363C"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.498Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "f07cb6ebc69bac2b": {
+      "sourceRelPath": "Acanthurusjaponicus_Powderbrowntang.png",
+      "sourceHash": "f34685236ba5e627e61f54052cd33fcdd483b771ab7397cc1a4c5bc71990079e",
+      "processedRelPath": "data/processed/f07cb6ebc69bac2b.png",
+      "colors": [
+        "#695A37",
+        "#3E392A",
+        "#F6DD2B",
+        "#9A8423"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.553Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "e748a0a054388f95": {
+      "sourceRelPath": "Acanthurusleucosternon_Powderbluesurgeon.png",
+      "sourceHash": "f0731409c3857a2cdee2d1c92a620bef3ec6be28c50f10efff74cd394a8c9b74",
+      "processedRelPath": "data/processed/e748a0a054388f95.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#4E73C9",
+        "#355386",
+        "#FFFD01",
+        "#E0D100"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.633Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "9bd9a2d496bcd238": {
+      "sourceRelPath": "Acanthurusnigricans_Gold-rimmedtang.png",
+      "sourceHash": "28607587d194b6e550a85d67527ce2a533fe227ff9ac72e8de0765183c0eeba9",
+      "processedRelPath": "data/processed/9bd9a2d496bcd238.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#695A37",
+        "#3E392A",
+        "#E6CD27",
+        "#9A8424"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.695Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "b5ea4b3f61780b63": {
+      "sourceRelPath": "Acanthurusolivaceus_Orangeshouldertang.png",
+      "sourceHash": "8e6a6024c2146f561611927d597926632ff048552ae16581dd96d7bb6bf70dad",
+      "processedRelPath": "data/processed/b5ea4b3f61780b63.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#B3C99D",
+        "#69876A",
+        "#546D6A",
+        "#EAAE55"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.756Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "b8e1d7fb390a86b2": {
+      "sourceRelPath": "Acanthuruspyroferus_Philippineyellowtang.png",
+      "sourceHash": "b19e99e678b8042242ef05988400020a410df0be9dda6b3059b92d3488caa0f1",
+      "processedRelPath": "data/processed/b8e1d7fb390a86b2.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#CF9838",
+        "#415269",
+        "#696F6C",
+        "#DDB424"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.825Z",
+      "colorSource": "auto",
+      "error": null
+    },
+    "2d640bcdcc24dc60": {
+      "sourceRelPath": "Acanthurussohal_Zebrasurgeonfish.png",
+      "sourceHash": "63335c2a5093627739d433ea9a2626820c82b2c6d4e6404979dcefb5e0d0ce66",
+      "processedRelPath": "data/processed/2d640bcdcc24dc60.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#CFE0E3",
+        "#27373E",
+        "#849EB0"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:07.896Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "48b0b48d98ed1d5b": {
+      "sourceRelPath": "Acanthurustriostegus_Convicttang.png",
+      "sourceHash": "d7955170bc7107c57d5ef26d0bfa441f16f1587cd4a3e272c87c8c7fafde7992",
+      "processedRelPath": "data/processed/48b0b48d98ed1d5b.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#F6F5F4",
+        "#818089",
+        "#B5B4B3",
+        "#575669"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:09:59.153Z",
+      "error": null,
+      "colorSource": "auto",
+      "qualityReview": "reviewed"
+    },
+    "daeff832b2f226bf": {
+      "sourceRelPath": "Acroporatenuis_Staghorncoral.png",
+      "sourceHash": "3c83c9df4d464df257e5f184247569cd75a1fcaabf44fb2c7041e5640da23dd2",
+      "processedRelPath": "data/processed/daeff832b2f226bf.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#84393B",
+        "#571C29",
+        "#9E506A",
+        "#E29EE2"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:08.046Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "61212008e04b1ef6": {
+      "sourceRelPath": "Acroporatortuosa_Staghorncoral.png",
+      "sourceHash": "0dbbde564be2b75608e7db6cde6376ee978640bbb9a4ec1dc0fd846204f31b39",
+      "processedRelPath": "data/processed/61212008e04b1ef6.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#69566C",
+        "#857E9D",
+        "#403953",
+        "#523640"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:08.186Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "7ff6bbbdc73764db": {
+      "sourceRelPath": "Acroporavalida_Staghorncoral.png",
+      "sourceHash": "132674d39d7c28a5cfd75a971ae7e83a819ed6e60e61528619c9050b0ff63690",
+      "processedRelPath": "data/processed/7ff6bbbdc73764db.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#6B2951",
+        "#6C249B",
+        "#9C5383",
+        "#863ACA"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:10:05.801Z",
+      "error": null,
+      "colorSource": "auto",
+      "qualityReview": "reviewed"
+    },
+    "8f09a849e28b88c0": {
+      "sourceRelPath": "Acroporayongei_Slimerstaghorncoral.png",
+      "sourceHash": "0403be5ea3a9893329d2088fbd2506cd4afd4908e0b1c6d61f08e5bf7e08c2c4",
+      "processedRelPath": "data/processed/8f09a849e28b88c0.png",
+      "backgroundModel": "gemini-flash",
+      "backgroundModelName": "gemini-3.1-flash-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.067,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#3B3A24",
+        "#36291F",
+        "#535226",
+        "#6E8206"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:08.380Z",
+      "colorSource": "auto",
+      "error": null
+    },
+    "9461842082b827ac": {
+      "sourceRelPath": "Actinemysmarmorata_Westernpondturtle.png",
+      "sourceHash": "f5807b30cc7c05cf291998d2d82f78b6935b1a03b194ea353a355585a8d9127a",
+      "processedRelPath": "data/processed/9461842082b827ac.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "post-processed-white-edge",
+      "colors": [
+        "#6F6B68",
+        "#99866C",
+        "#CCB284",
+        "#675740"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:08.441Z",
+      "error": null,
+      "colorSource": "auto"
+    },
+    "18d8d3f1bae32f2a": {
+      "sourceRelPath": "Actinodiscussp._Pacificfalsecoral.png",
+      "sourceHash": "8821fd094822da8926ce0a7bf18ab18267ab19385ac9b512eb820fd51c5bf04b",
+      "processedRelPath": "data/processed/18d8d3f1bae32f2a.png",
+      "backgroundModel": "gemini-lite",
+      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.0336,
+      "transparency": "opaque-output",
+      "colors": [
+        "#B5813B",
+        "#E0B36B",
+        "#9D5406",
+        "#B36909"
+      ],
+      "status": "processed",
+      "updatedAt": "2026-07-08T03:05:08.565Z",
+      "error": null,
+      "colorSource": "auto"
+    }
+  }
+}

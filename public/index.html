@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Animal Color Search</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+  <button id="view-toggle" class="view-toggle" type="button" aria-pressed="false">Full color search</button>
+  <div class="app-shell">
+    <aside class="file-panel">
+      <div class="panel-header">
+        <h1>animal color search</h1>
+        <p>local animal library</p>
+      </div>
+
+      <section class="panel-section">
+        <h2>Library</h2>
+        <div id="library-filters" class="library-filters" aria-label="Filter library"></div>
+        <label class="library-search-control" for="library-search">
+          <span>Search animals</span>
+          <input id="library-search" type="search" autocomplete="off" placeholder="Name, status, color, alt text">
+        </label>
+        <div id="library-summary" class="library-summary"></div>
+        <button id="select-all-button" type="button">Check visible</button>
+        <details class="panel-disclosure">
+          <summary>Upload images</summary>
+          <form id="upload-form" class="upload-form">
+            <input id="image-input" name="images" type="file" accept="image/png,image/jpeg,image/webp,image/avif" multiple>
+            <button type="submit">Upload images</button>
+          </form>
+        </details>
+      </section>
+
+      <div id="animal-list" class="animal-list"></div>
+
+      <section class="panel-section">
+        <details class="panel-disclosure">
+          <summary>Process</summary>
+          <div class="panel-actions">
+            <label class="model-control" for="process-model-select">
+              <span>Removal model</span>
+              <select id="process-model-select">
+                <option value="gemini-lite" selected>Fast cutout</option>
+                <option value="gemini-flash">Detailed cutout</option>
+              </select>
+            </label>
+            <button id="process-batch-button" type="button">Process checked</button>
+            <button id="process-all-button" type="button">Process unprocessed</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel-section maintenance-section">
+        <details class="panel-disclosure">
+          <summary>Maintenance</summary>
+          <div class="panel-actions">
+            <button id="update-all-colors-button" type="button">Recalculate colors</button>
+            <button id="refresh-button" type="button">Refresh list</button>
+          </div>
+        </details>
+      </section>
+    </aside>
+
+    <main>
+      <header>
+        <h2>Animal color search</h2>
+        <p id="status" class="message"></p>
+      </header>
+
+      <div id="progress-area" class="progress-area" hidden>
+        <div class="progress-copy">
+          <span id="progress-label">Processing...</span>
+          <span id="progress-percent">0%</span>
+        </div>
+        <div class="progress-track">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+      </div>
+
+      <section class="preview-section">
+        <div class="section-heading">
+          <span>1</span>
+            <div>
+              <h3>Review selected animal</h3>
+              <p>Preview cutout and colors.</p>
+          </div>
+        </div>
+        <div id="selected-animal"></div>
+        <div class="primary-row">
+          <button id="process-selected-button" type="button">Process active animal</button>
+        </div>
+      </section>
+
+      <section class="colors-section">
+        <div class="section-heading">
+          <span>2</span>
+          <div>
+            <h3>Searchable colors</h3>
+            <p>Detected colors</p>
+          </div>
+        </div>
+        <div id="selected-colors"></div>
+        <div class="secondary-row">
+          <button id="refresh-colors-button" type="button">Update automatic colors</button>
+        </div>
+        <details id="manual-color-details" class="manual-color-fix">
+          <summary>Manual color fix</summary>
+          <div id="manual-color-list"></div>
+          <div class="color-editor-row">
+            <button id="add-color-button" type="button">+ Pick color</button>
+            <input id="manual-color-input" type="color" value="#8c5a44" aria-label="Add chosen color">
+            <button id="undo-color-button" type="button">Undo</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="search-section">
+        <div class="section-heading">
+          <span>3</span>
+          <div>
+            <h3>Search by color</h3>
+          </div>
+        </div>
+
+        <div class="search-controls">
+          <div class="palette-control">
+            <span>Common animal colors</span>
+            <div id="color-palette" class="color-palette" aria-label="Common animal colors"></div>
+            </div>
+
+            <div class="search-workspace">
+              <div class="color-picker-area">
+                <div class="color-wheel-wrap">
+                  <canvas id="color-wheel" width="260" height="260" aria-label="Color wheel"></canvas>
+                  <span id="wheel-marker" aria-hidden="true"></span>
+                </div>
+                <div class="brightness-control">
+                  <div id="brightness-strip" role="slider" aria-label="Shade" title="Shade" aria-valuemin="8" aria-valuemax="100" aria-valuenow="55" tabindex="0">
+                    <span id="brightness-marker" aria-hidden="true"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="color-readout">
+                <div class="selected-color-card">
+                  <span id="selected-color-dot"></span>
+                  <div class="selected-color-copy">
+                    <span>Search color</span>
+                    <output id="selected-color-label" for="color-picker">#8C5A44</output>
+                    <div class="selected-color-fields">
+                      <div class="rgb-editor" aria-label="RGB color">
+                        <span class="field-group-label">RGB</span>
+                        <label class="channel-field" for="rgb-r">
+                          <span>R</span>
+                          <input id="rgb-r" type="number" min="0" max="255" step="1" value="140" aria-label="Red value">
+                        </label>
+                        <label class="channel-field" for="rgb-g">
+                          <span>G</span>
+                          <input id="rgb-g" type="number" min="0" max="255" step="1" value="90" aria-label="Green value">
+                        </label>
+                        <label class="channel-field" for="rgb-b">
+                          <span>B</span>
+                          <input id="rgb-b" type="number" min="0" max="255" step="1" value="68" aria-label="Blue value">
+                        </label>
+                      </div>
+                      <label class="hex-editor" for="color-picker">
+                        <span>Hex</span>
+                        <input id="color-picker" type="text" value="#8C5A44" inputmode="text" spellcheck="false"
+                          aria-label="Search hex color">
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+        </div>
+        <div class="results-bar">
+          <div id="result-summary" class="result-summary"></div>
+          <div class="strictness-control">
+            <span>Match strictness</span>
+            <div class="segmented" role="group" aria-label="Match strictness">
+              <button type="button" data-threshold="10">Close</button>
+              <button type="button" data-threshold="18" class="active">Balanced</button>
+              <button type="button" data-threshold="32">Explore</button>
+            </div>
+            <p id="strictness-help" hidden>Balanced finds visibly similar colors.</p>
+          </div>
+        </div>
+        <div id="results"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js" type="module"></script>
+</body>
+
+</html>
