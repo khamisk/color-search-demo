@@ -339,7 +339,11 @@ header p,
 }
 
 .quality-badge.check {
-  color: #8a4e00;
+  background: #fff2d8;
+  border: 1px solid #dfb563;
+  color: #643900;
+  font-weight: 700;
+  padding: 1px 5px;
 }
 
 .quality-badge.reviewed {
@@ -484,6 +488,29 @@ h3 {
 
 .quality-line.check {
   color: #8a4e00;
+}
+
+.quality-line.check p {
+  align-items: baseline;
+  background: #fff2d8;
+  border: 1px solid #dfb563;
+  border-left: 4px solid #c87800;
+  color: #563100;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 7px 10px;
+}
+
+.quality-line.check strong {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.quality-line.check span {
+  color: #754a12;
+  font-weight: 600;
 }
 
 .quality-line.confident {

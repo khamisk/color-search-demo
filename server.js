@@ -31,7 +31,9 @@ const PROCESSED_DIR = path.join(DATA_DIR, "processed");
 const THUMBS_DIR = path.join(DATA_DIR, "thumbs");
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const CACHE_FILE = path.join(DATA_DIR, "color-cache.json");
-const METADATA_FILE = path.join(ROOT_DIR, "Shedd_Go_AltText_Demo_Sample.xlsx");
+const FULL_METADATA_FILE = path.join(ROOT_DIR, "Shedd_Go_AltText_Drafts.xlsx");
+const SAMPLE_METADATA_FILE = path.join(ROOT_DIR, "Shedd_Go_AltText_Demo_Sample.xlsx");
+const METADATA_FILE = fsSync.existsSync(FULL_METADATA_FILE) ? FULL_METADATA_FILE : SAMPLE_METADATA_FILE;
 const SCHEMA_FILE = path.join(ROOT_DIR, "color-assignment.schema.json");
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.PORT || 3000);
@@ -378,7 +380,7 @@ async function getMetadataIndex() {
       }
 
       rowCount += 1;
-      byFilename.set(path.basename(originalFilename), {
+      byFilename.set(path.basename(originalFilename).toLowerCase(), {
         resourceId: cleanMetadataValue(values.A),
         attribution: cleanMetadataValue(values.B),
         scientificName: cleanScientificName(values.C),
@@ -406,6 +408,30 @@ async function getMetadataIndex() {
     };
     return metadataCache;
   }
+}
+
+function metadataForSourceFilename(metadataIndex, sourceFilename) {
+  const filename = path.basename(String(sourceFilename || ""));
+  const candidates = [filename];
+  const currentExtension = path.extname(filename);
+  const currentStem = currentExtension ? filename.slice(0, -currentExtension.length) : filename;
+  const originalStem = currentStem.replace(/-\d{10,}-[0-9a-f]{8}$/i, "");
+
+  if (originalStem !== currentStem) {
+    candidates.push(`${originalStem}${currentExtension}`);
+    if (ALLOWED_EXTENSIONS.has(path.extname(originalStem).toLowerCase())) {
+      candidates.push(originalStem);
+    }
+  }
+
+  for (const candidate of candidates) {
+    const metadata = metadataIndex.byFilename.get(candidate.toLowerCase());
+    if (metadata) {
+      return metadata;
+    }
+  }
+
+  return null;
 }
 
 function parseSharedStrings(sharedStringsBuffer) {
@@ -506,7 +532,7 @@ async function getAnimalRecords() {
   for (const sourcePath of files) {
     const sourceRelPath = normalizeRelPath(path.relative(ANIMALS_DIR, sourcePath));
     const originalFilename = path.basename(sourceRelPath);
-    const metadata = metadataIndex.byFilename.get(originalFilename) || null;
+    const metadata = metadataForSourceFilename(metadataIndex, originalFilename);
     const sourceHash = await hashFile(sourcePath);
     const id = animalId(sourceRelPath);
     const cacheEntry = cache.animals[id];
@@ -524,7 +550,7 @@ async function getAnimalRecords() {
     records.push({
       id,
       name: nameFromRelPath(sourceRelPath),
-      displayName: displayNameFromRelPath(sourceRelPath),
+      displayName: displayNameFromRelPath(metadata?.originalFilename || sourceRelPath),
       metadata,
       sourcePath,
       sourceRelPath,
@@ -1621,7 +1647,8 @@ function segmentKnownWords(value) {
     "honeycomb", "sergeant", "powder", "orange", "shoulder", "mustard", "doctor", "convict",
     "achilles", "doughnut", "pacific", "yellow", "rimmed", "slimer", "false", "coral",
     "gorgonian", "tarantula", "horned", "dragon", "lizard", "turtle", "cowfish", "surgeon", "tang",
-    "major", "starry", "white", "knee", "brown", "blue", "gold", "pond", "fish", "cup"
+    "flamboyant", "triggerfish", "cuttlefish", "clownfish", "clown", "major", "starry", "white",
+    "knee", "brown", "blue", "gold", "pond", "fish", "cup"
   ].sort((a, b) => b.length - a.length);
 
   return value

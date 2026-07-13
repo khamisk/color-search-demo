@@ -583,18 +583,21 @@ function qualityMarkup(animal, options = {}) {
     return "";
   }
 
-  const label = "needs review";
-  const reasons = quality.reasons?.length ? ` - ${quality.reasons.join("; ")}` : "";
+  const label = "Needs review";
+  const reasons = quality.reasons?.length ? quality.reasons.join("; ") : "";
   if (quality.status === "check") {
     return `
       <div class="quality-line check">
-        <p>${escapeHtml(label + reasons)}</p>
+        <p>
+          <strong>${escapeHtml(label)}</strong>
+          ${reasons ? `<span>${escapeHtml(reasons)}</span>` : ""}
+        </p>
         <button type="button" data-quality-action="reviewed">Mark reviewed</button>
       </div>
     `;
   }
 
-  return `<p class="quality-line ${escapeHtml(quality.status)}">${escapeHtml(label + reasons)}</p>`;
+  return `<p class="quality-line ${escapeHtml(quality.status)}">${escapeHtml(label)}${reasons ? ` - ${escapeHtml(reasons)}` : ""}</p>`;
 }
 
 function resultColorMarkup(colors) {
@@ -673,15 +676,11 @@ function selectedBatchIds() {
 }
 
 function libraryCounts() {
-  const selectedIds = selectedBatchIds();
   return {
     all: state.animals.length,
     processed: state.animals.filter((animal) => animal.status === "processed").length,
-    confident: state.animals.filter((animal) => animal.quality?.status === "confident").length,
     check: state.animals.filter((animal) => animal.quality?.status === "check").length,
-    reviewed: state.animals.filter((animal) => animal.quality?.status === "reviewed").length,
-    unscored: state.animals.filter((animal) => animal.status === "processed" && animal.quality?.status === "unscored").length,
-    checked: selectedIds.length
+    reviewed: state.animals.filter((animal) => animal.quality?.status === "reviewed").length
   };
 }
 
@@ -689,16 +688,10 @@ function animalMatchesLibraryFilter(animal) {
   switch (state.libraryFilter) {
     case "processed":
       return animal.status === "processed";
-    case "confident":
-      return animal.quality?.status === "confident";
     case "check":
       return animal.quality?.status === "check";
     case "reviewed":
       return animal.quality?.status === "reviewed";
-    case "unscored":
-      return animal.status === "processed" && animal.quality?.status === "unscored";
-    case "checked":
-      return state.selectedIds.has(animal.id);
     case "all":
     default:
       return true;
@@ -740,11 +733,8 @@ function renderLibraryFilters(counts = libraryCounts()) {
   const filters = [
     ["all", "All", counts.all],
     ["processed", "Ready", counts.processed],
-    ["confident", "Good", counts.confident],
     ["check", "Needs review", counts.check],
-    ["reviewed", "Reviewed", counts.reviewed],
-    ["unscored", "No color cue", counts.unscored],
-    ["checked", "Checked", counts.checked]
+    ["reviewed", "Reviewed", counts.reviewed]
   ];
 
   libraryFilters.innerHTML = filters.map(([key, label, count]) => `
@@ -766,8 +756,7 @@ function renderLibrarySummary() {
   const counts = libraryCounts();
   const summaryParts = [
     `${counts.all} animals`,
-    `${counts.processed} ready`,
-    `${counts.checked} checked`
+    `${counts.processed} ready`
   ];
   if (counts.check > 0) {
     summaryParts.push(`${counts.check} need review`);
