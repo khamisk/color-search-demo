@@ -790,7 +790,7 @@ async function analyzeCutoutPixels(imageBuffer) {
   let borderPixels = 0;
   let whiteBorderPixels = 0;
 
-  for (let offset = 0, index = 0; offset < data.length; offset += info.channels, index += 1) {
+  for (let offset = 0, index = 0; offset < data.length; offset += 4, index += 1) {
     const x = index % info.width;
     const y = Math.floor(index / info.width);
     const r = data[offset];
@@ -834,7 +834,7 @@ async function removeWhiteEdgeMatte(imageBuffer) {
       return;
     }
 
-    const offset = index * info.channels;
+    const offset = index * 4;
     if (!isStrictWhitePixel(data[offset], data[offset + 1], data[offset + 2])) {
       return;
     }
@@ -857,7 +857,7 @@ async function removeWhiteEdgeMatte(imageBuffer) {
   while (read < write) {
     const index = queue[read];
     read += 1;
-    const offset = index * info.channels;
+    const offset = index * 4;
     data[offset + 3] = 0;
     alphaPixels += 1;
 
@@ -875,7 +875,7 @@ async function removeWhiteEdgeMatte(imageBuffer) {
         continue;
       }
 
-      const neighborOffset = neighbor * info.channels;
+      const neighborOffset = neighbor * 4;
       if (!isStrictWhitePixel(data[neighborOffset], data[neighborOffset + 1], data[neighborOffset + 2])) {
         continue;
       }
@@ -978,7 +978,7 @@ async function extractSearchableColors(sourceImagePath, maskBuffer) {
   let subjectPixels = 0;
 
   for (let pixel = 0; pixel < totalPixels; pixel += 1) {
-    const offset = pixel * maskInfo.channels;
+    const offset = pixel * 4;
     const alpha = maskData[offset + 3];
     if (alpha < 80) {
       transparentPixels += 1;
@@ -989,7 +989,7 @@ async function extractSearchableColors(sourceImagePath, maskBuffer) {
   const hasAlphaMask = transparentShare >= 0.01;
 
   for (let pixel = 0; pixel < totalPixels; pixel += 1) {
-    const offset = pixel * maskInfo.channels;
+    const offset = pixel * 4;
     const alpha = maskData[offset + 3];
     const r = maskData[offset];
     const g = maskData[offset + 1];
@@ -1039,7 +1039,8 @@ async function extractSearchableColorsFromCutout(imageBuffer) {
   let transparentPixels = 0;
   let visiblePixels = 0;
 
-  for (let offset = 0; offset < data.length; offset += info.channels) {
+  for (let offset = 0; offset < data.length; offset += 4
+  ) {
     if (data[offset + 3] < 80) {
       transparentPixels += 1;
     }
@@ -1048,7 +1049,7 @@ async function extractSearchableColorsFromCutout(imageBuffer) {
   const transparentShare = totalPixels > 0 ? transparentPixels / totalPixels : 0;
   const skipWhiteMatte = transparentShare < 0.01;
 
-  for (let offset = 0; offset < data.length; offset += info.channels) {
+  for (let offset = 0; offset < data.length; offset += 4) {
     const alpha = data[offset + 3];
     if (alpha < 80) {
       continue;
