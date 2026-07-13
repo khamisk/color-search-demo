@@ -902,16 +902,21 @@ async function removeWhiteEdgeMatte(imageBuffer) {
 
 async function assignSearchableColors(sourceImagePath, maskImagePath, maskBuffer) {
   let localColors = [];
-  const cutoutColors = await extractSearchableColorsFromCutout(maskBuffer);
+  let cutoutColors = [];
+
+  // Safeguard the fallback extraction source
+  try {
+    cutoutColors = await extractSearchableColorsFromCutout(maskBuffer);
+  } catch (error) {
+    console.error("Warning: Fallback cutout color extraction failed:", error.message);
+  }
+
   try {
     const originalColors = await extractSearchableColors(sourceImagePath, maskBuffer);
     localColors = reconcileAutomaticColorLists(originalColors, cutoutColors);
   } catch {
+    // If original fails, we fall back to cutout colors (even if empty)
     localColors = cutoutColors;
-  }
-
-  if (!USE_CODEX_COLOR_ASSIGNMENT && localColors.length > 0) {
-    return localColors;
   }
 
   try {
