@@ -902,11 +902,22 @@ async function removeWhiteEdgeMatte(imageBuffer) {
 
 async function assignSearchableColors(sourceImagePath, maskImagePath, maskBuffer) {
   let localColors = [];
-  const cutoutColors = await extractSearchableColorsFromCutout(maskBuffer);
-  try {
-    const originalColors = await extractSearchableColors(sourceImagePath, maskBuffer);
+
+  // Fire off both intensive CPU extraction processes concurrently
+  const [cutoutResult, originalResult] = await Promise.allSettled([
+    extractSearchableColorsFromCutout(maskBuffer),
+    extractSearchableColors(sourceImagePath, maskBuffer)
+  ]);
+
+  // Unpack results safely, defaulting to empty arrays on failure
+  const cutoutColors = cutoutResult.status === "fulfilled" ? cutoutResult.value : [];
+  const originalColors = originalResult.status === "fulfilled" ? originalResult.value : [];
+
+  // Handle fallback reconciliation architecture matching original error handling
+  if (originalResult.status === "fulfilled") {
     localColors = reconcileAutomaticColorLists(originalColors, cutoutColors);
-  } catch {
+  } else {
+    // If original image extraction failed, fall back onto cutout colors
     localColors = cutoutColors;
   }
 
