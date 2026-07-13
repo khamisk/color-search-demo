@@ -51,6 +51,8 @@ Open:
 
 Useful checks:
 
+`npm test`
+
 `node --check server.js`
 
 `node --check public/app.js`
@@ -459,7 +461,7 @@ Known MVP Limitations
 - JSON file instead of database
 - no authentication
 - sequential processing
-- no formal test suite yet
+- targeted automated coverage for color extraction only; most server and frontend flows still rely on manual checks
 - Gemini output quality can vary
 - color extraction is heuristic
 - cost tracking is estimated, not exact billing

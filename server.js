@@ -15,6 +15,13 @@ import express from "express";
 import multer from "multer";
 import sharp from "sharp";
 
+import {
+  RGBA_CHANNELS,
+  assertRgbaPixelBuffer,
+  buildSubjectMask,
+  runAutomaticColorExtractions
+} from "./color-extraction-helpers.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = __dirname;
@@ -296,9 +303,11 @@ app.use((error, _req, res, _next) => {
   res.status(statusCode).json({ error: error.message || "Server error." });
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`Animal Color Search running at http://${HOST}:${PORT}`);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  app.listen(PORT, HOST, () => {
+    console.log(`Animal Color Search running at http://${HOST}:${PORT}`);
+  });
+}
 
 async function ensureRuntimeFiles() {
   await fs.mkdir(ANIMALS_DIR, { recursive: true });
@@ -785,12 +794,13 @@ async function analyzeCutoutPixels(imageBuffer) {
     .resize({ width: 220, height: 220, fit: "inside", withoutEnlargement: true })
     .raw()
     .toBuffer({ resolveWithObject: true });
+  assertRgbaPixelBuffer(data, info, "Cutout analysis image");
   const pixels = info.width * info.height;
   let transparentPixels = 0;
   let borderPixels = 0;
   let whiteBorderPixels = 0;
 
-  for (let offset = 0, index = 0; offset < data.length; offset += info.channels, index += 1) {
+  for (let offset = 0, index = 0; offset < data.length; offset += RGBA_CHANNELS, index += 1) {
     const x = index % info.width;
     const y = Math.floor(index / info.width);
     const r = data[offset];
@@ -821,6 +831,7 @@ async function removeWhiteEdgeMatte(imageBuffer) {
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
+  assertRgbaPixelBuffer(data, info, "White matte removal image");
   const totalPixels = info.width * info.height;
   const visited = new Uint8Array(totalPixels);
   const queue = new Int32Array(totalPixels);
@@ -834,7 +845,7 @@ async function removeWhiteEdgeMatte(imageBuffer) {
       return;
     }
 
-    const offset = index * info.channels;
+    const offset = index * RGBA_CHANNELS;
     if (!isStrictWhitePixel(data[offset], data[offset + 1], data[offset + 2])) {
       return;
     }
@@ -857,7 +868,7 @@ async function removeWhiteEdgeMatte(imageBuffer) {
   while (read < write) {
     const index = queue[read];
     read += 1;
-    const offset = index * info.channels;
+    const offset = index * RGBA_CHANNELS;
     data[offset + 3] = 0;
     alphaPixels += 1;
 
@@ -875,7 +886,7 @@ async function removeWhiteEdgeMatte(imageBuffer) {
         continue;
       }
 
-      const neighborOffset = neighbor * info.channels;
+      const neighborOffset = neighbor * RGBA_CHANNELS;
       if (!isStrictWhitePixel(data[neighborOffset], data[neighborOffset + 1], data[neighborOffset + 2])) {
         continue;
       }
@@ -901,17 +912,22 @@ async function removeWhiteEdgeMatte(imageBuffer) {
 }
 
 async function assignSearchableColors(sourceImagePath, maskImagePath, maskBuffer) {
-  let localColors = [];
-  const cutoutColors = await extractSearchableColorsFromCutout(maskBuffer);
-  try {
-    const originalColors = await extractSearchableColors(sourceImagePath, maskBuffer);
-    localColors = reconcileAutomaticColorLists(originalColors, cutoutColors);
-  } catch {
-    localColors = cutoutColors;
+  const extraction = await runAutomaticColorExtractions({
+    extractCutoutColors: () => extractSearchableColorsFromCutout(maskBuffer),
+    extractOriginalColors: () => extractSearchableColors(sourceImagePath, maskBuffer),
+    reconcileColors: reconcileAutomaticColorLists
+  });
+  const localColors = extraction.colors;
+
+  for (const error of extraction.errors) {
+    console.warn(`Automatic color extraction source failed: ${error?.message || error}`);
   }
 
-  if (!USE_CODEX_COLOR_ASSIGNMENT && localColors.length > 0) {
-    return localColors;
+  if (!USE_CODEX_COLOR_ASSIGNMENT) {
+    if (localColors.length > 0) {
+      return localColors;
+    }
+    throw new AggregateError(extraction.errors, "Local color extraction found no searchable colors.");
   }
 
   try {
@@ -971,38 +987,15 @@ async function extractSearchableColors(sourceImagePath, maskBuffer) {
     .resize(maskInfo.width, maskInfo.height, { fit: "fill" })
     .raw()
     .toBuffer({ resolveWithObject: true });
+  assertRgbaPixelBuffer(maskData, maskInfo, "Color extraction mask");
+  assertRgbaPixelBuffer(sourceData, sourceInfo, "Color extraction source image");
 
   const totalPixels = maskInfo.width * maskInfo.height;
-  const subjectMask = new Uint8Array(totalPixels);
-  let transparentPixels = 0;
-  let subjectPixels = 0;
-
-  for (let pixel = 0; pixel < totalPixels; pixel += 1) {
-    const offset = pixel * maskInfo.channels;
-    const alpha = maskData[offset + 3];
-    if (alpha < 80) {
-      transparentPixels += 1;
-    }
-  }
-
-  const transparentShare = totalPixels > 0 ? transparentPixels / totalPixels : 0;
-  const hasAlphaMask = transparentShare >= 0.01;
-
-  for (let pixel = 0; pixel < totalPixels; pixel += 1) {
-    const offset = pixel * maskInfo.channels;
-    const alpha = maskData[offset + 3];
-    const r = maskData[offset];
-    const g = maskData[offset + 1];
-    const b = maskData[offset + 2];
-    const isSubject = hasAlphaMask
-      ? alpha >= 96
-      : alpha >= 80 && !isLikelyWhiteMattePixel(r, g, b);
-
-    if (isSubject) {
-      subjectMask[pixel] = 1;
-      subjectPixels += 1;
-    }
-  }
+  const { subjectMask, subjectPixels } = buildSubjectMask(
+    maskData,
+    maskInfo,
+    isLikelyWhiteMattePixel
+  );
 
   const refinedMask = refineSubjectMask(subjectMask, maskInfo.width, maskInfo.height);
   const refinedPixels = countMaskPixels(refinedMask);
@@ -1015,7 +1008,7 @@ async function extractSearchableColors(sourceImagePath, maskBuffer) {
       continue;
     }
 
-    const offset = pixel * sourceInfo.channels;
+    const offset = pixel * RGBA_CHANNELS;
     const alpha = sourceData[offset + 3];
     if (alpha < 80) {
       continue;
@@ -1034,12 +1027,13 @@ async function extractSearchableColorsFromCutout(imageBuffer) {
     .resize({ width: 420, height: 420, fit: "inside", withoutEnlargement: true })
     .raw()
     .toBuffer({ resolveWithObject: true });
+  assertRgbaPixelBuffer(data, info, "Cutout color extraction image");
   const buckets = new Map();
   const totalPixels = info.width * info.height;
   let transparentPixels = 0;
   let visiblePixels = 0;
 
-  for (let offset = 0; offset < data.length; offset += info.channels) {
+  for (let offset = 0; offset < data.length; offset += RGBA_CHANNELS) {
     if (data[offset + 3] < 80) {
       transparentPixels += 1;
     }
@@ -1048,7 +1042,7 @@ async function extractSearchableColorsFromCutout(imageBuffer) {
   const transparentShare = totalPixels > 0 ? transparentPixels / totalPixels : 0;
   const skipWhiteMatte = transparentShare < 0.01;
 
-  for (let offset = 0; offset < data.length; offset += info.channels) {
+  for (let offset = 0; offset < data.length; offset += RGBA_CHANNELS) {
     const alpha = data[offset + 3];
     if (alpha < 80) {
       continue;
@@ -1903,3 +1897,5 @@ function trimOutput(value) {
   const text = String(value || "").trim();
   return text.length > 800 ? `${text.slice(0, 800)}...` : text;
 }
+
+export { app, assignSearchableColors };
