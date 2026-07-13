@@ -988,10 +988,10 @@ async function extractSearchableColors(sourceImagePath, maskBuffer) {
   let transparentPixels = 0;
   let subjectPixels = 0;
 
+  // Loop 1: Count background transparency metrics to establish the filtering thresholds
   for (let pixel = 0; pixel < totalPixels; pixel += 1) {
     const offset = pixel * maskInfo.channels;
-    const alpha = maskData[offset + 3];
-    if (alpha < 80) {
+    if (maskData[offset + 3] < 80) {
       transparentPixels += 1;
     }
   }
@@ -999,15 +999,23 @@ async function extractSearchableColors(sourceImagePath, maskBuffer) {
   const transparentShare = totalPixels > 0 ? transparentPixels / totalPixels : 0;
   const hasAlphaMask = transparentShare >= 0.01;
 
+  // Loop 2: Build the subject mask, skipping transparent background paths efficiently
   for (let pixel = 0; pixel < totalPixels; pixel += 1) {
     const offset = pixel * maskInfo.channels;
     const alpha = maskData[offset + 3];
+
+    // Early exit optimization: skip processing if the pixel fails the threshold
+    if (alpha < 80) {
+      continue;
+    }
+
     const r = maskData[offset];
     const g = maskData[offset + 1];
     const b = maskData[offset + 2];
+    
     const isSubject = hasAlphaMask
       ? alpha >= 96
-      : alpha >= 80 && !isLikelyWhiteMattePixel(r, g, b);
+      : !isLikelyWhiteMattePixel(r, g, b); // We already know alpha >= 80 here
 
     if (isSubject) {
       subjectMask[pixel] = 1;
