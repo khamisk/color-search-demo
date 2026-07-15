@@ -179,14 +179,16 @@
         </div>
         <div class="results-bar">
           <div id="result-summary" class="result-summary"></div>
-          <div class="strictness-control">
-            <span>Match strictness</span>
-            <div class="segmented" role="group" aria-label="Match strictness">
-              <button type="button" data-threshold="10">Close</button>
-              <button type="button" data-threshold="18" class="active">Balanced</button>
-              <button type="button" data-threshold="32">Explore</button>
+          <div class="results-controls">
+            <div class="strictness-control">
+              <span>Match strictness</span>
+              <div class="segmented" role="group" aria-label="Match strictness">
+                <button type="button" data-threshold="10">Close</button>
+                <button type="button" data-threshold="18" class="active">Balanced</button>
+                <button type="button" data-threshold="32">Explore</button>
+              </div>
+              <p id="strictness-help" hidden>Balanced finds visibly similar colors.</p>
             </div>
-            <p id="strictness-help" hidden>Balanced finds visibly similar colors.</p>
           </div>
         </div>
         <div id="results"></div>
