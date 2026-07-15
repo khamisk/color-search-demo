@@ -395,6 +395,8 @@ The XLSX file is parsed with:
 - `fflate`
 - `fast-xml-parser`
 
+CSV metadata is also supported through `Shedd_Go_AltText_Drafts.csv` or `Shedd_Go_AltText_Demo_Sample.csv`. It uses the same filename-based join and accepts either the existing spreadsheet headers or short `filename` and `alt_text` headers. The built-in parser supports UTF-8 BOMs, quoted commas, escaped quotes, and quoted line breaks.
+
 Rows are matched by original filename. When there is a match, the app can display:
 
 - resource ID

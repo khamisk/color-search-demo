@@ -31,9 +31,16 @@ const PROCESSED_DIR = path.join(DATA_DIR, "processed");
 const THUMBS_DIR = path.join(DATA_DIR, "thumbs");
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const CACHE_FILE = path.join(DATA_DIR, "color-cache.json");
-const FULL_METADATA_FILE = path.join(ROOT_DIR, "Shedd_Go_AltText_Drafts.xlsx");
-const SAMPLE_METADATA_FILE = path.join(ROOT_DIR, "Shedd_Go_AltText_Demo_Sample.xlsx");
-const METADATA_FILE = fsSync.existsSync(FULL_METADATA_FILE) ? FULL_METADATA_FILE : SAMPLE_METADATA_FILE;
+const FULL_METADATA_CSV_FILE = path.join(ROOT_DIR, "Shedd_Go_AltText_Drafts.csv");
+const FULL_METADATA_XLSX_FILE = path.join(ROOT_DIR, "Shedd_Go_AltText_Drafts.xlsx");
+const SAMPLE_METADATA_CSV_FILE = path.join(ROOT_DIR, "Shedd_Go_AltText_Demo_Sample.csv");
+const SAMPLE_METADATA_XLSX_FILE = path.join(ROOT_DIR, "Shedd_Go_AltText_Demo_Sample.xlsx");
+const METADATA_FILE = [
+  FULL_METADATA_CSV_FILE,
+  FULL_METADATA_XLSX_FILE,
+  SAMPLE_METADATA_CSV_FILE,
+  SAMPLE_METADATA_XLSX_FILE
+].find((filePath) => fsSync.existsSync(filePath)) || SAMPLE_METADATA_XLSX_FILE;
 const SCHEMA_FILE = path.join(ROOT_DIR, "color-assignment.schema.json");
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.PORT || 3000);
@@ -71,6 +78,7 @@ const xlsxXmlParser = new XMLParser({
 });
 let geminiClient = null;
 let metadataCache = {
+  filePath: null,
   mtimeMs: null,
   byFilename: new Map(),
   rowCount: 0
@@ -360,54 +368,177 @@ function delay(ms) {
 async function getMetadataIndex() {
   try {
     const stats = await fs.stat(METADATA_FILE);
-    if (metadataCache.mtimeMs === stats.mtimeMs) {
+    if (metadataCache.filePath === METADATA_FILE && metadataCache.mtimeMs === stats.mtimeMs) {
       return metadataCache;
     }
 
-    const workbook = await fs.readFile(METADATA_FILE);
-    const unzipped = unzipSync(new Uint8Array(workbook));
-    const sharedStrings = parseSharedStrings(unzipped["xl/sharedStrings.xml"]);
-    const sheet = parseXlsxXml(unzipped["xl/worksheets/sheet1.xml"]);
-    const rows = toArray(sheet?.worksheet?.sheetData?.row);
-    const byFilename = new Map();
-    let rowCount = 0;
-
-    for (const row of rows.slice(1)) {
-      const values = xlsxRowValues(row, sharedStrings);
-      const originalFilename = cleanMetadataValue(values.D);
-      if (!originalFilename) {
-        continue;
-      }
-
-      rowCount += 1;
-      byFilename.set(path.basename(originalFilename).toLowerCase(), {
-        resourceId: cleanMetadataValue(values.A),
-        attribution: cleanMetadataValue(values.B),
-        scientificName: cleanScientificName(values.C),
-        originalFilename: path.basename(originalFilename),
-        altTextDraft: cleanMetadataValue(values.E),
-        reviewed: parseReviewedFlag(values.F)
-      });
-    }
+    const metadataFile = await fs.readFile(METADATA_FILE);
+    const parsedIndex = path.extname(METADATA_FILE).toLowerCase() === ".csv"
+      ? parseMetadataCsv(metadataFile.toString("utf8"))
+      : parseMetadataXlsx(metadataFile);
 
     metadataCache = {
+      filePath: METADATA_FILE,
       mtimeMs: stats.mtimeMs,
-      byFilename,
-      rowCount
+      ...parsedIndex
     };
     return metadataCache;
   } catch (error) {
     if (error.code !== "ENOENT") {
-      console.warn(`Could not read Shedd metadata spreadsheet: ${error.message}`);
+      console.warn(`Could not read Shedd metadata file: ${error.message}`);
     }
 
     metadataCache = {
+      filePath: null,
       mtimeMs: null,
       byFilename: new Map(),
       rowCount: 0
     };
     return metadataCache;
   }
+}
+
+function parseMetadataXlsx(workbook) {
+  const unzipped = unzipSync(new Uint8Array(workbook));
+  const sharedStrings = parseSharedStrings(unzipped["xl/sharedStrings.xml"]);
+  const sheet = parseXlsxXml(unzipped["xl/worksheets/sheet1.xml"]);
+  const rows = toArray(sheet?.worksheet?.sheetData?.row);
+  return buildMetadataIndex(rows.slice(1).map((row) => xlsxRowValues(row, sharedStrings)));
+}
+
+function parseMetadataCsv(csvText) {
+  const rows = parseCsvRows(csvText);
+  if (rows.length === 0) {
+    return buildMetadataIndex([]);
+  }
+
+  const headers = csvMetadataHeaders(rows[0]);
+  if (headers.originalFilename === undefined) {
+    throw new Error("CSV metadata must include an Original filename or filename column.");
+  }
+
+  const values = rows.slice(1).map((row) => ({
+    A: csvValue(row, headers.resourceId),
+    B: csvValue(row, headers.attribution),
+    C: csvValue(row, headers.scientificName),
+    D: csvValue(row, headers.originalFilename),
+    E: csvValue(row, headers.altTextDraft),
+    F: csvValue(row, headers.reviewed)
+  }));
+  return buildMetadataIndex(values);
+}
+
+function buildMetadataIndex(rows) {
+  const byFilename = new Map();
+  let rowCount = 0;
+
+  for (const values of rows) {
+    const originalFilename = cleanMetadataValue(values.D);
+    if (!originalFilename) {
+      continue;
+    }
+
+    const filename = path.basename(originalFilename);
+    rowCount += 1;
+    byFilename.set(filename.toLowerCase(), {
+      resourceId: cleanMetadataValue(values.A),
+      attribution: cleanMetadataValue(values.B),
+      scientificName: cleanScientificName(values.C),
+      originalFilename: filename,
+      altTextDraft: cleanMetadataValue(values.E),
+      reviewed: parseReviewedFlag(values.F)
+    });
+  }
+
+  return { byFilename, rowCount };
+}
+
+function parseCsvRows(csvText) {
+  const text = String(csvText || "").replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+
+  const finishRow = () => {
+    row.push(field);
+    if (row.some((value) => value !== "")) {
+      rows.push(row);
+    }
+    row = [];
+    field = "";
+  };
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (inQuotes) {
+      if (character === '"' && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (character === '"') {
+        inQuotes = false;
+      } else {
+        field += character;
+      }
+      continue;
+    }
+
+    if (character === '"' && field.length === 0) {
+      inQuotes = true;
+    } else if (character === ",") {
+      row.push(field);
+      field = "";
+    } else if (character === "\n" || character === "\r") {
+      if (character === "\r" && text[index + 1] === "\n") {
+        index += 1;
+      }
+      finishRow();
+    } else {
+      field += character;
+    }
+  }
+
+  if (inQuotes) {
+    throw new Error("CSV metadata contains an unterminated quoted field.");
+  }
+  if (field.length > 0 || row.length > 0) {
+    finishRow();
+  }
+
+  return rows;
+}
+
+function csvMetadataHeaders(headerRow) {
+  const aliases = {
+    resourceId: ["resourceid", "resourceids", "id"],
+    attribution: ["attribution", "credit", "credits"],
+    scientificName: ["scientificname", "scientific"],
+    originalFilename: ["originalfilename", "filename", "sourcefilename", "sourcefile", "imagefilename"],
+    altTextDraft: ["alttextdraft", "alttext", "imagedescription", "description"],
+    reviewed: ["reviewed", "reviewstatus", "reviewedstatus"]
+  };
+  const normalizedHeaders = headerRow.map(normalizeCsvHeader);
+  const indices = {};
+
+  for (const [field, names] of Object.entries(aliases)) {
+    const index = normalizedHeaders.findIndex((header) => names.includes(header));
+    if (index >= 0) {
+      indices[field] = index;
+    }
+  }
+
+  return indices;
+}
+
+function normalizeCsvHeader(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function csvValue(row, index) {
+  return index === undefined ? "" : row[index] || "";
 }
 
 function metadataForSourceFilename(metadataIndex, sourceFilename) {
@@ -741,7 +872,7 @@ async function removeBackgroundWithGemini(imageBuffer, processModel) {
 
   const outputImage = interaction.output_image;
   const geminiBuffer = await imageContentToBuffer(outputImage);
-  const cutout = await prepareCutoutForStorage(geminiBuffer);
+  const cutout = await prepareCutoutForStorage(geminiBuffer, imageBuffer);
 
   return {
     ...cutout,
@@ -777,7 +908,7 @@ async function imageContentToBuffer(imageContent) {
   throw new Error("Gemini did not return an editable image result.");
 }
 
-async function prepareCutoutForStorage(imageBuffer) {
+async function prepareCutoutForStorage(imageBuffer, sourceImageBuffer = null) {
   const pngBuffer = await sharp(imageBuffer)
     .rotate()
     .ensureAlpha()
@@ -794,7 +925,7 @@ async function prepareCutoutForStorage(imageBuffer) {
   }
 
   if (analysis.whiteEdgeRatio > 0.45) {
-    const postProcessed = await removeWhiteEdgeMatte(pngBuffer);
+    const postProcessed = await removeWhiteEdgeMatte(pngBuffer, sourceImageBuffer);
     if (postProcessed) {
       return {
         buffer: postProcessed,
@@ -852,12 +983,21 @@ async function analyzeCutoutPixels(imageBuffer) {
   };
 }
 
-async function removeWhiteEdgeMatte(imageBuffer) {
+async function removeWhiteEdgeMatte(imageBuffer, sourceImageBuffer = null) {
   const { data, info } = await sharp(imageBuffer)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
   assertRgbaPixelBuffer(data, info, "White matte removal image");
+  const source = sourceImageBuffer
+    ? await sharp(sourceImageBuffer)
+      .rotate()
+      .resize({ width: info.width, height: info.height, fit: "fill" })
+      .flatten({ background: "#FFFFFF" })
+      .toColourspace("srgb")
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    : null;
   const totalPixels = info.width * info.height;
   const visited = new Uint8Array(totalPixels);
   const queue = new Int32Array(totalPixels);
@@ -923,6 +1063,27 @@ async function removeWhiteEdgeMatte(imageBuffer) {
     }
   }
 
+  if (source) {
+    for (let index = 0; index < totalPixels; index += 1) {
+      const offset = index * RGBA_CHANNELS;
+      if (data[offset + 3] === 0 || !isLikelyWhiteMattePixel(data[offset], data[offset + 1], data[offset + 2])) {
+        continue;
+      }
+
+      const sourceOffset = index * source.info.channels;
+      if (isSourceWhiteDetail(
+        source.data[sourceOffset],
+        source.data[sourceOffset + 1],
+        source.data[sourceOffset + 2]
+      )) {
+        continue;
+      }
+
+      data[offset + 3] = 0;
+      alphaPixels += 1;
+    }
+  }
+
   const alphaRatio = totalPixels > 0 ? alphaPixels / totalPixels : 0;
   if (alphaRatio < 0.02 || alphaRatio > 0.965) {
     return null;
@@ -935,6 +1096,12 @@ async function removeWhiteEdgeMatte(imageBuffer) {
       channels: info.channels
     }
   }).png().toBuffer();
+}
+
+function isSourceWhiteDetail(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  return min >= 180 && max - min <= 70;
 }
 
 async function assignSearchableColors(sourceImagePath, maskImagePath, maskBuffer) {
@@ -1925,4 +2092,4 @@ function trimOutput(value) {
   return text.length > 800 ? `${text.slice(0, 800)}...` : text;
 }
 
-export { app, assignSearchableColors };
+export { app, assignSearchableColors, parseMetadataCsv, removeWhiteEdgeMatte };

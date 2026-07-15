@@ -5,6 +5,7 @@ const state = {
   libraryFilter: "all",
   libraryQuery: "",
   busy: false,
+  previewImageView: "transparent",
   hsv: { h: 22, s: 0.51, v: 0.55 }
 };
 
@@ -613,6 +614,45 @@ function resultColorMarkup(colors) {
   `).join("")}</div>`;
 }
 
+function resultImageAlt(animal) {
+  return animal?.metadata?.altTextDraft || primaryAnimalName(animal);
+}
+
+function resultAltControlMarkup(animal) {
+  const description = animal?.metadata?.altTextDraft;
+  if (!description) {
+    return "";
+  }
+
+  const panelId = `result-alt-${animal.id}`;
+  const animalName = primaryAnimalName(animal);
+  return `
+    <div class="result-alt-control">
+      <button
+        type="button"
+        class="result-alt-toggle"
+        data-result-alt-toggle
+        data-alt-animal-name="${escapeHtml(animalName)}"
+        aria-expanded="false"
+        aria-controls="${escapeHtml(panelId)}"
+        aria-label="View image description for ${escapeHtml(animalName)}"
+        title="View image description"
+      >ALT</button>
+      <div
+        class="result-alt-panel"
+        id="${escapeHtml(panelId)}"
+        role="note"
+        aria-label="Image description for ${escapeHtml(animalName)}"
+        tabindex="-1"
+        hidden
+      >
+        <span class="result-alt-title">Image description</span>
+        <p>${escapeHtml(description)}</p>
+      </div>
+    </div>
+  `;
+}
+
 function selectedAnimalRecord() {
   return state.animals.find((animal) => animal.id === state.selectedId) || state.animals[0] || null;
 }
@@ -847,13 +887,25 @@ function renderSelectedAnimal() {
           <img src="${escapeHtml(animal.originalUrl)}" alt="${escapeHtml(animal.name)} original">
         </div>
       </figure>
-      <figure>
-        <figcaption>Background removed preview</figcaption>
-        <div class="image-frame">
-        ${animal.processedUrl
-          ? `<img src="${escapeHtml(animal.processedUrl)}" alt="${escapeHtml(animal.name)} background removed">`
-          : "Not processed"}
-        </div>
+      <figure class="processed-preview-figure">
+        ${animal.processedUrl ? `
+          <figcaption class="processed-preview-caption">
+            <span>Processed preview</span>
+            <div class="segmented preview-background-toggle" role="group" aria-label="Processed preview background">
+              <button type="button" data-preview-image-view="transparent" class="${state.previewImageView === "transparent" ? "active" : ""}" aria-pressed="${state.previewImageView === "transparent"}">Transparent</button>
+              <button type="button" data-preview-image-view="original" class="${state.previewImageView === "original" ? "active" : ""}" aria-pressed="${state.previewImageView === "original"}">Original</button>
+            </div>
+          </figcaption>
+          <div class="image-frame processed-image-preview">
+            <div class="processed-preview-stage" data-preview-mode="${state.previewImageView}">
+              <img class="preview-image-cutout" src="${escapeHtml(animal.processedUrl)}" alt="${escapeHtml(animal.name)} background removed">
+              <img class="preview-image-original" src="${escapeHtml(animal.originalUrl)}" alt="${escapeHtml(animal.name)} in its original setting">
+            </div>
+          </div>
+        ` : `
+          <figcaption>Processed preview</figcaption>
+          <div class="image-frame">Not processed</div>
+        `}
       </figure>
     </div>
     ${animal.error ? `<p>${escapeHtml(animal.error)}</p>` : ""}
@@ -905,7 +957,8 @@ function renderResults(matches) {
     <div class="result-grid ${matches.length <= 3 ? "few-results" : ""}">${matches.map((match) => `
     <article class="result-tile">
       <div class="result-image">
-        <img src="${escapeHtml(match.thumbUrl || match.processedUrl || match.originalUrl)}" alt="${escapeHtml(primaryAnimalName(match))}">
+        <img class="result-image-original" src="${escapeHtml(match.originalUrl)}" alt="${escapeHtml(resultImageAlt(match))}">
+        ${resultAltControlMarkup(match)}
       </div>
       <div class="result-info">
         <h4 title="${escapeHtml(primaryAnimalName(match))}">${escapeHtml(primaryAnimalName(match))}</h4>
@@ -913,7 +966,6 @@ function renderResults(matches) {
         <span class="accuracy">${escapeHtml(matchAccuracyLabel(match))}</span>
         ${closestColorMarkup(match.closestColor)}
         ${resultColorMarkup(match.colors)}
-        ${match.metadata?.altTextDraft ? `<p class="result-alt">${escapeHtml(match.metadata.altTextDraft)}</p>` : ""}
       </div>
     </article>
   `).join("")}</div>`;
@@ -922,6 +974,39 @@ function renderResults(matches) {
     return;
   }
   window.requestAnimationFrame(() => results.classList.add("results-pop"));
+}
+
+function resultAltPanel(button) {
+  const panelId = button?.getAttribute("aria-controls");
+  return panelId ? document.getElementById(panelId) : null;
+}
+
+function setResultAltOpen(button, open, options = {}) {
+  const panel = resultAltPanel(button);
+  if (!button || !panel) {
+    return;
+  }
+
+  button.setAttribute("aria-expanded", open ? "true" : "false");
+  button.setAttribute(
+    "aria-label",
+    `${open ? "Hide" : "View"} image description for ${button.dataset.altAnimalName}`
+  );
+  button.title = open ? "Hide image description" : "View image description";
+  panel.hidden = !open;
+  if (open && options.focusPanel) {
+    panel.focus({ preventScroll: true });
+  } else if (!open && options.returnFocus) {
+    button.focus({ preventScroll: true });
+  }
+}
+
+function closeResultAltPanels(exceptButton = null) {
+  results.querySelectorAll("[data-result-alt-toggle][aria-expanded=\"true\"]").forEach((button) => {
+    if (button !== exceptButton) {
+      setResultAltOpen(button, false);
+    }
+  });
 }
 
 function strictnessLabel() {
@@ -945,7 +1030,7 @@ function closestColorMarkup(color) {
   return `
     <p class="closest-color">
       <span class="color-swatch" style="background:${escapeHtml(hex)}"></span>
-      <span><span class="closest-label">closest color</span> ${escapeHtml(hex)}</span>
+      <span><span class="closest-label">closest color</span> <span class="closest-value">${escapeHtml(hex)}</span></span>
     </p>
   `;
 }
@@ -1457,7 +1542,46 @@ animalList.addEventListener("click", (event) => {
   scrollToSelectedAnimalReview();
 });
 
+results.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-result-alt-toggle]");
+  if (!button) {
+    return;
+  }
+
+  const shouldOpen = button.getAttribute("aria-expanded") !== "true";
+  closeResultAltPanels(button);
+  setResultAltOpen(button, shouldOpen, { focusPanel: shouldOpen });
+});
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest(".result-alt-control")) {
+    return;
+  }
+  closeResultAltPanels();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") {
+    return;
+  }
+
+  const button = results.querySelector("[data-result-alt-toggle][aria-expanded=\"true\"]");
+  if (!button) {
+    return;
+  }
+
+  event.preventDefault();
+  setResultAltOpen(button, false, { returnFocus: true });
+});
+
 selectedAnimal.addEventListener("click", (event) => {
+  const previewButton = event.target.closest("[data-preview-image-view]");
+  if (previewButton) {
+    state.previewImageView = previewButton.dataset.previewImageView;
+    renderSelectedAnimal();
+    return;
+  }
+
   const button = event.target.closest("[data-quality-action]");
   if (!button) {
     return;

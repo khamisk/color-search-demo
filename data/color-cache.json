@@ -45,10 +45,10 @@
       "sourceRelPath": "Acanthogorgiasp._Blueberrygorgonian.png",
       "sourceHash": "53bc4706cfa4c9d9360ff2fbe8dd75c819adf43436f7d54493c98fea1aade092",
       "processedRelPath": "data/processed/4c71f3fb1a2a70a6.png",
-      "backgroundModel": "gemini-lite",
-      "backgroundModelName": "gemini-3.1-flash-lite-image",
+      "backgroundModel": "gemini-flash",
+      "backgroundModelName": "gemini-3.1-flash-image",
       "processingProvider": "gemini",
-      "estimatedCostUsd": 0.0336,
+      "estimatedCostUsd": 0.067,
       "transparency": "post-processed-white-edge",
       "colors": [
         "#546C83",
@@ -56,7 +56,7 @@
         "#6B8284"
       ],
       "status": "processed",
-      "updatedAt": "2026-07-08T03:05:06.676Z",
+      "updatedAt": "2026-07-13T18:52:00.992Z",
       "colorSource": "auto",
       "error": null
     },
@@ -194,6 +194,11 @@
       "sourceRelPath": "Acanthuruschirurgus_Doctorfish.png",
       "sourceHash": "5255bef97edcf4dd2b7c216b41d6831d414d2889b2a8d1be9676ffd27185fab3",
       "processedRelPath": "data/processed/7e69b8df5d097b87.png",
+      "backgroundModel": "gemini-flash",
+      "backgroundModelName": "gemini-3.1-flash-image",
+      "processingProvider": "gemini",
+      "estimatedCostUsd": 0.067,
+      "transparency": "post-processed-white-edge",
       "colors": [
         "#E1E1E1",
         "#687081",
@@ -201,7 +206,7 @@
         "#0654B6"
       ],
       "status": "processed",
-      "updatedAt": "2026-07-08T03:05:07.342Z",
+      "updatedAt": "2026-07-13T16:57:40.601Z",
       "error": null,
       "colorSource": "auto"
     },
