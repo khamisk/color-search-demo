@@ -12,6 +12,19 @@ const ROOT_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const CACHE_FILE = path.join(ROOT_DIR, "data", "color-cache.json");
 const HEX_COLOR = /^#[0-9A-F]{6}$/;
 
+test("every cached mask has a readable filename linked to its original", async () => {
+  const cache = JSON.parse(await fs.readFile(CACHE_FILE, "utf8"));
+  const entries = Object.values(cache.animals);
+
+  assert.equal(cache.version, 2);
+  assert.equal(entries.length, 26);
+  for (const entry of entries) {
+    const originalStem = path.parse(entry.sourceRelPath).name;
+    assert.equal(entry.maskRelPath, `data/masks/${originalStem}-mask.png`);
+    await fs.access(path.join(ROOT_DIR, entry.maskRelPath));
+  }
+});
+
 function isLikelyWhiteMattePixel(r, g, b) {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
@@ -57,7 +70,7 @@ function buildLegacySubjectMask(maskData, maskInfo) {
 test("real processed animals produce valid searchable colors", async (t) => {
   const cache = JSON.parse(await fs.readFile(CACHE_FILE, "utf8"));
   const entries = Object.values(cache.animals).filter((entry) => (
-    entry.sourceRelPath && entry.processedRelPath
+    entry.sourceRelPath && entry.maskRelPath
   ));
 
   assert.equal(entries.length, 26);
@@ -65,9 +78,9 @@ test("real processed animals produce valid searchable colors", async (t) => {
   for (const entry of entries) {
     await t.test(entry.sourceRelPath, async () => {
       const sourcePath = path.join(ROOT_DIR, "animals", entry.sourceRelPath);
-      const processedPath = path.join(ROOT_DIR, entry.processedRelPath);
-      const maskBuffer = await fs.readFile(processedPath);
-      const colors = await assignSearchableColors(sourcePath, processedPath, maskBuffer);
+      const maskPath = path.join(ROOT_DIR, entry.maskRelPath);
+      const maskBuffer = await fs.readFile(maskPath);
+      const colors = await assignSearchableColors(sourcePath, maskPath, maskBuffer);
 
       assert.ok(colors.length >= 1 && colors.length <= 4);
       assert.ok(colors.every((color) => HEX_COLOR.test(color)));
@@ -77,11 +90,11 @@ test("real processed animals produce valid searchable colors", async (t) => {
 
 test("one-pass mask analysis exactly matches legacy behavior for every processed animal", async () => {
   const cache = JSON.parse(await fs.readFile(CACHE_FILE, "utf8"));
-  const entries = Object.values(cache.animals).filter((entry) => entry.processedRelPath);
+  const entries = Object.values(cache.animals).filter((entry) => entry.maskRelPath);
 
   for (const entry of entries) {
-    const processedPath = path.join(ROOT_DIR, entry.processedRelPath);
-    const { data, info } = await sharp(processedPath)
+    const maskPath = path.join(ROOT_DIR, entry.maskRelPath);
+    const { data, info } = await sharp(maskPath)
       .ensureAlpha()
       .resize({ width: 420, height: 420, fit: "inside", withoutEnlargement: true })
       .raw()
@@ -89,19 +102,19 @@ test("one-pass mask analysis exactly matches legacy behavior for every processed
     const legacy = buildLegacySubjectMask(data, info);
     const optimized = buildSubjectMask(data, info, isLikelyWhiteMattePixel);
 
-    assert.equal(optimized.subjectPixels, legacy.subjectPixels, entry.processedRelPath);
-    assert.deepEqual(optimized.subjectMask, legacy.subjectMask, entry.processedRelPath);
+    assert.equal(optimized.subjectPixels, legacy.subjectPixels, entry.maskRelPath);
+    assert.deepEqual(optimized.subjectMask, legacy.subjectMask, entry.maskRelPath);
   }
 });
 
 test("real pipeline falls back to cutout colors when the original image is unavailable", async () => {
   const cache = JSON.parse(await fs.readFile(CACHE_FILE, "utf8"));
-  const entry = Object.values(cache.animals).find((candidate) => candidate.processedRelPath);
-  const processedPath = path.join(ROOT_DIR, entry.processedRelPath);
-  const maskBuffer = await fs.readFile(processedPath);
+  const entry = Object.values(cache.animals).find((candidate) => candidate.maskRelPath);
+  const maskPath = path.join(ROOT_DIR, entry.maskRelPath);
+  const maskBuffer = await fs.readFile(maskPath);
   const missingSourcePath = path.join(ROOT_DIR, "animals", "does-not-exist.png");
 
-  const colors = await assignSearchableColors(missingSourcePath, processedPath, maskBuffer);
+  const colors = await assignSearchableColors(missingSourcePath, maskPath, maskBuffer);
 
   assert.ok(colors.length >= 1 && colors.length <= 4);
   assert.ok(colors.every((color) => HEX_COLOR.test(color)));

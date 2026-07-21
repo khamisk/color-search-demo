@@ -26,7 +26,7 @@ Why some choices changed during the demo:
 
 - Gemini background removal replaced the first local background-removal approach because the local cutouts were too harsh on detailed animals and corals.
 
-- Trimmed cutout thumbnails were added for processing/review displays because transparent cutouts can have large invisible canvas space. User-facing search results use the original image.
+- Generated cutouts are retained as internal subject masks. User-facing search results use the original image.
 
 - The full color search view was added because the processing/review UI is useful for explaining the workflow, but too busy for the actual search demo.
 
@@ -88,38 +88,42 @@ Local JSON cache. This acts like the demo database.
 
 Original image library.
 
-`data/processed/`
+`data/masks/`
 
-Background-removed cutout PNGs.
-
-`data/thumbs/`
-
-Trimmed cutout thumbnails retained for processing/review support. User-facing search results display the original animal image.
+Background-removed subject-mask PNGs named after their originals, such as `AnimalName-mask.png`.
 
 
 Data Storage
 
 The demo does not use a database. It uses local folders plus `data/color-cache.json`.
 
-The original image files stay in `animals/`. The JSON cache stores references to those files and references to the generated cutouts.
+The original image files stay in `animals/`. The JSON cache explicitly links each original to its generated internal subject mask.
+
+The top-level `version` is the cache schema version. Under `animals`, each object key is a 16-character stable ID: the first 16 hexadecimal characters of a SHA-1 hash of `sourceRelPath`. The ID gives API routes and UI state a compact identifier without using a generated-asset filename. It stays the same while the relative path stays the same; renaming or moving the original creates a different ID.
 
 Each cache entry stores:
 
-- `sourceRelPath`: original image path inside `animals/`
-- `sourceHash`: hash of the original image
-- `processedRelPath`: generated cutout path
-- `backgroundModel`: selected Gemini processing mode
-- `backgroundModelName`: actual Gemini model name
+- `sourceRelPath`: original image path relative to `animals/`; this is also the input used to derive the stable ID
+- `maskRelPath`: generated internal subject-mask path relative to the project root; its readable filename follows `OriginalName-mask.png`
+- `sourceHash`: full SHA-256 fingerprint of the original file bytes, used to detect content changes even when the filename is unchanged
+- `backgroundModel`: application processing mode, such as `gemini-lite` or `gemini-flash`
+- `backgroundModelName`: exact Gemini API model name used for the mask
 - `processingProvider`: currently `gemini`
-- `estimatedCostUsd`: estimated output-image cost
-- `transparency`: how transparency was handled
+- `estimatedCostUsd`: estimated output-image cost, not a billing receipt
+- `transparency`: result of mask preparation, such as native alpha, white-matte cleanup, or opaque output
 - `colors`: saved searchable hex colors
 - `colorSource`: `auto` or `manual`
-- `status`: `processed`, `processing`, `error`, or unprocessed state
+- `status`: workflow state; `processed` means a usable mask and searchable colors exist and is not an old filename convention
 - `updatedAt`: last update timestamp
 - `error`: processing error message when something fails
+- `qualityReview`: optional manual review state
 
-The `sourceHash` is important. If the original image changes, the old cache entry is treated as stale and the image needs to be processed again.
+The stable ID and `sourceHash` answer different questions:
+
+- Stable ID: "Is this the same relative source path?"
+- `sourceHash`: "Are the bytes at that path still the same image?"
+
+If the original contents change, the ID stays the same but `sourceHash` changes. The old mask and colors are then treated as stale and the image needs to be processed again. If the original is renamed or moved, its ID changes because its relative path changed.
 
 Reason for this structure:
 
@@ -137,10 +141,10 @@ The main loading endpoint is:
 Implementation path:
 
 1. `getAnimalRecords()` scans `animals/`.
-2. Each file gets a stable ID from its relative path.
-3. The source image is hashed.
+2. Each file gets a stable 16-character ID derived from its relative path.
+3. The source image bytes are fingerprinted with SHA-256.
 4. The server checks `data/color-cache.json` for a matching current cache entry.
-5. If processed output exists, the app exposes URLs for the original image, cutout, and thumbnail.
+5. The app exposes the original-image URL and a `hasMask` workflow flag; mask files remain internal.
 6. Spreadsheet metadata is joined when a filename match is found.
 7. The server returns public animal objects to the frontend.
 
@@ -186,7 +190,7 @@ Processing steps:
 
 1. Normalize the original image with Sharp.
 2. Send the image to Gemini for background removal.
-3. Save the generated cutout as a PNG in `data/processed/`.
+3. Save the generated cutout for internal use as a readable `OriginalName-mask.png` file in `data/masks/`.
 4. Extract searchable colors.
 5. Save all processing metadata into `data/color-cache.json`.
 
@@ -223,25 +227,6 @@ The transparency result is stored in the cache, for example:
 - `post-processed-white-edge`
 - `white-matte`
 - `opaque-output`
-
-
-Thumbnail Generation
-
-Processing/review support can use thumbnails from:
-
-`data/thumbs/`
-
-Main function:
-
-`ensureDisplayThumbnail()`
-
-Some generated cutouts have a large transparent canvas around the animal. The thumbnail step trims that empty space for processing/review displays.
-
-The thumbnail does not replace the processed cutout. It is only used for display.
-
-Reason for this step:
-
-Some processed PNGs have correct transparency but keep a large canvas around the animal. The thumbnail trims display whitespace while leaving the real processed cutout untouched. The user-facing search gallery uses the original animal image rather than the cutout thumbnail.
 
 
 Color Extraction
