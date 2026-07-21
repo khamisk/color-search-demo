@@ -5,6 +5,7 @@ const state = {
   libraryFilter: "all",
   libraryQuery: "",
   busy: false,
+  activeBatchId: null,
   hsv: { h: 22, s: 0.51, v: 0.55 }
 };
 
@@ -25,6 +26,10 @@ const processBatchButton = document.querySelector("#process-batch-button");
 const processAllButton = document.querySelector("#process-all-button");
 const updateAllColorsButton = document.querySelector("#update-all-colors-button");
 const processModelSelect = document.querySelector("#process-model-select");
+const processingModeSelect = document.querySelector("#processing-mode-select");
+const batchJobStatus = document.querySelector("#batch-job-status");
+const batchJobCopy = document.querySelector("#batch-job-copy");
+const cancelBatchButton = document.querySelector("#cancel-batch-button");
 const selectAllButton = document.querySelector("#select-all-button");
 const refreshColorsButton = document.querySelector("#refresh-colors-button");
 const colorPicker = document.querySelector("#color-picker");
@@ -54,6 +59,7 @@ const strictnessHelp = document.querySelector("#strictness-help");
 
 let searchThreshold = 18;
 let progressTimer = null;
+let batchPollTimer = null;
 let draggingWheel = false;
 let draggingBrightness = false;
 let searchFrame = null;
@@ -109,10 +115,12 @@ function setBusy(isBusy) {
     uploadForm.querySelector("button"),
     imageInput,
     selectAllButton,
-    processModelSelect
+    processModelSelect,
+    processingModeSelect
   ].forEach((control) => {
     control.disabled = isBusy;
   });
+  cancelBatchButton.disabled = isBusy;
   renderLibrarySummary();
   updateColorEditorState();
 }
@@ -156,6 +164,91 @@ function stopProgress(finished) {
 
   setBusy(false);
   renderLibrarySummary();
+}
+
+function isActiveBatchState(value) {
+  return ["preparing", "submitted", "running", "importing"].includes(String(value || ""));
+}
+
+function renderBatchStatus(batch) {
+  if (!batch) {
+    batchJobStatus.hidden = true;
+    batchJobCopy.textContent = "";
+    cancelBatchButton.hidden = true;
+    return;
+  }
+
+  const completed = Number(batch.imported || 0);
+  const failed = Number(batch.failed || 0);
+  const total = Number(batch.total || 0);
+  const stateLabels = {
+    preparing: "Preparing batch",
+    submitted: "Waiting for Gemini",
+    running: "Gemini is processing",
+    importing: "Saving completed cutouts",
+    succeeded: "Batch complete",
+    partial: "Batch complete with failures",
+    failed: "Batch failed",
+    cancelled: "Batch cancelled"
+  };
+  const parts = [`${stateLabels[batch.state] || batch.state}: ${completed}/${total} ready`];
+  if (failed > 0) {
+    parts.push(`${failed} failed`);
+  }
+
+  batchJobStatus.hidden = false;
+  batchJobCopy.textContent = parts.join(" · ");
+  cancelBatchButton.hidden = !isActiveBatchState(batch.state);
+  cancelBatchButton.disabled = state.busy;
+}
+
+function stopBatchPolling() {
+  if (batchPollTimer) {
+    window.clearTimeout(batchPollTimer);
+    batchPollTimer = null;
+  }
+}
+
+async function pollBatchJob(jobId) {
+  stopBatchPolling();
+  try {
+    const data = await requestJson(`/api/process-batches/${encodeURIComponent(jobId)}`);
+    state.animals = data.animals;
+    render();
+    renderBatchStatus(data.batch);
+
+    if (isActiveBatchState(data.batch.state)) {
+      state.activeBatchId = jobId;
+      batchPollTimer = window.setTimeout(() => {
+        pollBatchJob(jobId).catch((error) => setStatus(error.message));
+      }, 10_000);
+      return;
+    }
+
+    state.activeBatchId = null;
+    const result = data.batch.state === "succeeded"
+      ? `Batch finished: ${data.batch.imported} images are ready.`
+      : `Batch finished with ${data.batch.failed} failed image${data.batch.failed === 1 ? "" : "s"}.`;
+    setStatus(result);
+    await searchMatches({ quiet: true, force: true });
+  } catch (error) {
+    setStatus(error.message);
+    batchPollTimer = window.setTimeout(() => {
+      pollBatchJob(jobId).catch((nextError) => setStatus(nextError.message));
+    }, 30_000);
+  }
+}
+
+async function restoreActiveBatch() {
+  const data = await requestJson("/api/process-batches");
+  const active = data.batches.find((batch) => isActiveBatchState(batch.state));
+  if (!active) {
+    return;
+  }
+
+  state.activeBatchId = active.id;
+  renderBatchStatus(active);
+  await pollBatchJob(active.id);
 }
 
 function escapeHtml(value) {
@@ -653,10 +746,24 @@ function selectedAnimalRecord() {
 }
 
 function unprocessedAnimals() {
-  return state.animals.filter((animal) => animal.status !== "processed");
+  return state.animals.filter((animal) => (
+    animal.status !== "processed" && !["queued", "submitted", "running", "importing"].includes(animal.batchStatus)
+  ));
 }
 
-function statusLabel(status) {
+function statusLabel(status, batchStatus = null) {
+  if (["queued", "preparing", "submitted"].includes(batchStatus)) {
+    return "batch queued";
+  }
+  if (["running", "importing"].includes(batchStatus)) {
+    return "batch running";
+  }
+  if (batchStatus === "error") {
+    return "batch failed";
+  }
+  if (batchStatus === "cancelled") {
+    return "batch cancelled";
+  }
   if (status === "processed") {
     return "ready";
   }
@@ -685,7 +792,10 @@ function qualityLabel(animal) {
 
 function sidebarStatusMarkup(animal) {
   const badges = [];
-  if (animal.status === "error") {
+  if (animal.batchStatus) {
+    const batchClass = animal.batchStatus === "error" ? "error" : "batch";
+    badges.push(`<span class="status-badge ${batchClass}">${escapeHtml(statusLabel(animal.status, animal.batchStatus))}</span>`);
+  } else if (animal.status === "error") {
     badges.push(`<span class="status-badge error">${escapeHtml(statusLabel(animal.status))}</span>`);
   } else if (animal.status !== "processed") {
     badges.push(`<span class="status-badge ${escapeHtml(animal.status)}">${escapeHtml(statusLabel(animal.status))}</span>`);
@@ -745,7 +855,8 @@ function animalMatchesLibrarySearch(animal) {
     primaryAnimalName(animal),
     secondaryAnimalName(animal),
     animal.status,
-    statusLabel(animal.status),
+    animal.batchStatus,
+    statusLabel(animal.status, animal.batchStatus),
     animal.quality?.status,
     qualityLabel(animal),
     ...(animal.quality?.reasons || []),
@@ -799,15 +910,19 @@ function renderLibrarySummary() {
   librarySummary.textContent = summaryParts.join(" - ");
   renderLibraryFilters(counts);
 
+  const usesBatch = processingModeSelect.value === "batch";
+
   processBatchButton.classList.toggle("has-selection", selectedCount > 0);
   processBatchButton.disabled = state.busy || selectedCount === 0;
-  processBatchButton.textContent = selectedCount > 0 ? `Process checked (${selectedCount})` : "Process checked";
+  processBatchButton.textContent = selectedCount > 0
+    ? `${usesBatch ? "Submit checked batch" : "Process checked"} (${selectedCount})`
+    : usesBatch ? "Submit checked batch" : "Process checked";
 
   processAllButton.classList.toggle("has-work", unprocessed > 0);
   processAllButton.classList.toggle("no-work", unprocessed === 0);
   processAllButton.disabled = state.busy || unprocessed === 0;
   processAllButton.textContent = unprocessed > 0
-    ? `Process unprocessed (${unprocessed})`
+    ? `${usesBatch ? "Batch unprocessed" : "Process unprocessed"} (${unprocessed})`
     : "All files processed";
 
   updateAllColorsButton.disabled = state.busy || processed === 0;
@@ -1369,9 +1484,42 @@ async function chooseManualColor() {
   manualColorInput.click();
 }
 
-async function processAnimals(ids, label, estimatedSeconds) {
+async function submitBatchAnimals(ids) {
+  const count = ids ? ids.length : unprocessedAnimals().length;
+  setBusy(true);
+  setStatus(`Submitting ${count} image${count === 1 ? "" : "s"} to Gemini Batch...`);
+  try {
+    const body = { model: processModelSelect.value };
+    if (ids) {
+      body.ids = ids;
+    }
+    const data = await requestJson("/api/process-batches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    state.animals = data.animals;
+    state.activeBatchId = data.batch.id;
+    render();
+    renderBatchStatus(data.batch);
+    setStatus("Batch accepted. Gemini will process it asynchronously at the batch rate.");
+    pollBatchJob(data.batch.id).catch((error) => setStatus(error.message));
+  } catch (error) {
+    setStatus(error.message);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function processAnimals(ids, label, estimatedSeconds, options = {}) {
   if (ids && ids.length === 0) {
     setStatus("Select at least one animal.");
+    return;
+  }
+
+  const mode = options.mode || processingModeSelect.value;
+  if (mode === "batch") {
+    await submitBatchAnimals(ids);
     return;
   }
 
@@ -1532,7 +1680,7 @@ processSelectedButton.addEventListener("click", async () => {
   }
 
   const animal = selectedAnimalRecord();
-  await processAnimals([state.selectedId], `Processing ${animal?.name || "active animal"}...`, 35);
+  await processAnimals([state.selectedId], `Processing ${animal?.name || "active animal"}...`, 35, { mode: "standard" });
 });
 
 refreshColorsButton.addEventListener("click", async () => {
@@ -1606,6 +1754,35 @@ processAllButton.addEventListener("click", async () => {
   }
 
   await processAnimals(null, `Processing ${count} unprocessed animal${count === 1 ? "" : "s"}...`, Math.max(35, count * 28));
+});
+
+processingModeSelect.addEventListener("change", () => {
+  renderLibrarySummary();
+  if (processingModeSelect.value === "batch") {
+    setStatus("Batch is lower cost and asynchronous; completed cutouts are imported automatically.");
+  }
+});
+
+cancelBatchButton.addEventListener("click", async () => {
+  if (!state.activeBatchId) {
+    return;
+  }
+
+  setBusy(true);
+  try {
+    const data = await requestJson(`/api/process-batches/${encodeURIComponent(state.activeBatchId)}/cancel`, {
+      method: "POST"
+    });
+    stopBatchPolling();
+    state.activeBatchId = null;
+    renderBatchStatus(data.batch);
+    await loadAnimals();
+    setStatus("Batch cancelled. Requests already completed may still have incurred usage.");
+  } catch (error) {
+    setStatus(error.message);
+  } finally {
+    setBusy(false);
+  }
 });
 
 colorPicker.addEventListener("input", () => {
@@ -1742,8 +1919,9 @@ renderColorPalette();
 applyViewMode();
 selectSearchColor("#8C5A44", false);
 loadAnimals()
-  .then(() => {
+  .then(async () => {
     applyViewMode();
-    return searchMatches();
+    await searchMatches();
+    await restoreActiveBatch();
   })
   .catch((error) => setStatus(error.message));

@@ -132,6 +132,10 @@ Decision 2: how is the work submitted?
 - Standard processing: normal request. Better for live demos or small sets because results come back immediately.
 - Batch processing: lower-cost bulk request. Better for hundreds or thousands of images because it is cheaper, but less immediate.
 
+Both modes are available in the Process panel. Standard sends immediate Gemini Interactions requests. Batch creates asynchronous Gemini `generateContent` jobs, stores their provider job IDs locally, and imports each completed image through the same matte cleanup, mask storage, and color extraction used by standard processing. The submission mode does not intentionally lower image quality; using the same model and settings should produce comparable, though not pixel-identical, results.
+
+Batch delivery is automatic rather than email-based. Gemini exposes a completed results file; the running server downloads it, saves the returned masks in `data/masks/`, updates searchable colors in `data/color-cache.json`, and shows ready and failed counts in the Process panel. Restarting the server resumes this import workflow from the saved local batch-job metadata.
+
 The cost scenarios combine one model choice with one submission mode.
 
 Cost estimates:
@@ -165,7 +169,7 @@ The main production changes would be:
 
 - database instead of local JSON
 - cloud storage instead of local folders
-- batch jobs for large image sets
+- move local batch-job metadata and files to managed cloud job storage
 - progress tracking and retries
 - confidence scores for color quality
 - review queue only for low-confidence images

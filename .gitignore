@@ -3,6 +3,7 @@ node_modules/
 .env.*
 .playwright-cli/
 data/server.*.log
+data/batch-jobs.json
 data/tmp/
 *.tmp
 
