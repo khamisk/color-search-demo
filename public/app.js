@@ -616,6 +616,7 @@ function resultImageAlt(animal) {
   return animal?.metadata?.altTextDraft || primaryAnimalName(animal);
 }
 
+// Set to false to hide the visible ALT control without changing image alt attributes.
 const SHOW_ALT_TEXT_BUTTON = true;
 
 function resultAltControlMarkup(animal) {
