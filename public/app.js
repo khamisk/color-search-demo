@@ -560,7 +560,6 @@ function metadataBlockMarkup(animal) {
         ${sourceFile ? `<div><dt>Source file</dt><dd>${escapeHtml(sourceFile)}</dd></div>` : ""}
         ${metadata.scientificName ? `<div><dt>Scientific name</dt><dd>${escapeHtml(metadata.scientificName)}</dd></div>` : ""}
       </dl>
-      ${metadata.altTextDraft ? `<p>${escapeHtml(metadata.altTextDraft)}</p>` : `<p>No draft alt text in spreadsheet.</p>`}
     </div>
   `;
 }
@@ -616,41 +615,6 @@ function resultColorMarkup(colors) {
 
 function resultImageAlt(animal) {
   return animal?.metadata?.altTextDraft || primaryAnimalName(animal);
-}
-
-function resultAltControlMarkup(animal) {
-  const description = animal?.metadata?.altTextDraft;
-  if (!description) {
-    return "";
-  }
-
-  const panelId = `result-alt-${animal.id}`;
-  const animalName = primaryAnimalName(animal);
-  return `
-    <div class="result-alt-control">
-      <button
-        type="button"
-        class="result-alt-toggle"
-        data-result-alt-toggle
-        data-alt-animal-name="${escapeHtml(animalName)}"
-        aria-expanded="false"
-        aria-controls="${escapeHtml(panelId)}"
-        aria-label="View image description for ${escapeHtml(animalName)}"
-        title="View image description"
-      >ALT</button>
-      <div
-        class="result-alt-panel"
-        id="${escapeHtml(panelId)}"
-        role="note"
-        aria-label="Image description for ${escapeHtml(animalName)}"
-        tabindex="-1"
-        hidden
-      >
-        <span class="result-alt-title">Image description</span>
-        <p>${escapeHtml(description)}</p>
-      </div>
-    </div>
-  `;
 }
 
 function selectedAnimalRecord() {
@@ -884,7 +848,7 @@ function renderSelectedAnimal() {
       <figure>
         <figcaption>Original</figcaption>
         <div class="image-frame">
-          <img src="${escapeHtml(animal.originalUrl)}" alt="${escapeHtml(animal.name)} original">
+          <img src="${escapeHtml(animal.originalUrl)}" alt="${escapeHtml(resultImageAlt(animal))}">
         </div>
       </figure>
       <figure class="processed-preview-figure">
@@ -958,7 +922,6 @@ function renderResults(matches) {
     <article class="result-tile">
       <div class="result-image">
         <img class="result-image-original" src="${escapeHtml(match.originalUrl)}" alt="${escapeHtml(resultImageAlt(match))}">
-        ${resultAltControlMarkup(match)}
       </div>
       <div class="result-info">
         <h4 title="${escapeHtml(primaryAnimalName(match))}">${escapeHtml(primaryAnimalName(match))}</h4>
@@ -974,39 +937,6 @@ function renderResults(matches) {
     return;
   }
   window.requestAnimationFrame(() => results.classList.add("results-pop"));
-}
-
-function resultAltPanel(button) {
-  const panelId = button?.getAttribute("aria-controls");
-  return panelId ? document.getElementById(panelId) : null;
-}
-
-function setResultAltOpen(button, open, options = {}) {
-  const panel = resultAltPanel(button);
-  if (!button || !panel) {
-    return;
-  }
-
-  button.setAttribute("aria-expanded", open ? "true" : "false");
-  button.setAttribute(
-    "aria-label",
-    `${open ? "Hide" : "View"} image description for ${button.dataset.altAnimalName}`
-  );
-  button.title = open ? "Hide image description" : "View image description";
-  panel.hidden = !open;
-  if (open && options.focusPanel) {
-    panel.focus({ preventScroll: true });
-  } else if (!open && options.returnFocus) {
-    button.focus({ preventScroll: true });
-  }
-}
-
-function closeResultAltPanels(exceptButton = null) {
-  results.querySelectorAll("[data-result-alt-toggle][aria-expanded=\"true\"]").forEach((button) => {
-    if (button !== exceptButton) {
-      setResultAltOpen(button, false);
-    }
-  });
 }
 
 function strictnessLabel() {
@@ -1540,38 +1470,6 @@ animalList.addEventListener("click", (event) => {
   state.selectedId = button.dataset.id;
   render();
   scrollToSelectedAnimalReview();
-});
-
-results.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-result-alt-toggle]");
-  if (!button) {
-    return;
-  }
-
-  const shouldOpen = button.getAttribute("aria-expanded") !== "true";
-  closeResultAltPanels(button);
-  setResultAltOpen(button, shouldOpen, { focusPanel: shouldOpen });
-});
-
-document.addEventListener("click", (event) => {
-  if (event.target.closest(".result-alt-control")) {
-    return;
-  }
-  closeResultAltPanels();
-});
-
-document.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape") {
-    return;
-  }
-
-  const button = results.querySelector("[data-result-alt-toggle][aria-expanded=\"true\"]");
-  if (!button) {
-    return;
-  }
-
-  event.preventDefault();
-  setResultAltOpen(button, false, { returnFocus: true });
 });
 
 selectedAnimal.addEventListener("click", (event) => {

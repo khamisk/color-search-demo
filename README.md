@@ -35,9 +35,9 @@ Do not commit `.env`.
 
 - `animals/` - original demo images
 - `data/processed/` - background-removed cutouts
-- `data/thumbs/` - gallery thumbnails
+- `data/thumbs/` - trimmed cutout thumbnails for processing/review support
 - `data/color-cache.json` - saved image/color metadata
-- `Shedd_Go_AltText_Demo_Sample.xlsx` - public sample metadata for the included demo images
+- `Shedd_Go_AltText_Demo_Sample.xlsx` - sanitized fallback metadata for the included demo images
 - `public/` - frontend HTML, CSS, and JavaScript
 - `server.js` - local Express server, image processing, and search API
 - `docs/` - design notes and code review guide
@@ -46,11 +46,11 @@ Do not commit `.env`.
 
 This is a local MVP/demo, not production infrastructure.
 
-The included XLSX is a small public sample from the original working spreadsheet. It only contains rows for the demo images in this repo.
+The included XLSX is a small sanitized fallback sample containing only the demo images. CSV is the preferred format for handoff and integration; XLSX remains supported so the checked-in demo runs with its existing reviewed alt text.
 
 ## CSV Alt Text Metadata
 
-CSV metadata is supported as an alternative to XLSX. Place either of these files in the project root and restart the server:
+CSV is the preferred format for managed alt-text metadata. Place either of these files in the project root and restart the server:
 
 - `Shedd_Go_AltText_Drafts.csv` for the full working metadata
 - `Shedd_Go_AltText_Demo_Sample.csv` for demo metadata
@@ -65,6 +65,8 @@ Abudefdufsaxatilis_Sergeantmajor.png,"Silver fish with five bold black vertical 
 ```
 
 When matching files exist, full metadata takes priority over demo metadata and CSV takes priority over XLSX at the same level. CSV fields may contain commas, quotes, or line breaks when enclosed in double quotes.
+
+Alt text is retained in the image metadata returned by the API and applied to HTML image `alt` attributes for accessibility. It is not rendered as visible copy in the search results.
 
 The color search uses automated image analysis tuned for the included demo set. New uploaded images may need review after automatic processing.
 
@@ -81,3 +83,4 @@ For implementation details, see:
 - logs
 - temporary output files
 - `Shedd_Go_AltText_Drafts.csv`
+- `imageMetaData_Final.csv`

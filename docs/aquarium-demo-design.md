@@ -31,7 +31,7 @@ This MVP stores everything locally.
 
 - Original uploaded images are stored in `animals/`.
 - Background-removed cutouts are stored in `data/processed/`.
-- Trimmed gallery thumbnails are stored in `data/thumbs/`.
+- Trimmed cutout thumbnails for processing/review support are stored in `data/thumbs/`.
 - Image status, detected colors, and processing metadata are stored in `data/color-cache.json`.
 
 The JSON file acts like a small local database for the demo. It does not store the actual image pixels. Instead, it stores references to the image files plus metadata about each image.
@@ -98,11 +98,11 @@ Search modes:
 
 Spreadsheet Metadata
 
-The app can read `Shedd_Go_AltText_Demo_Sample.xlsx`.
+CSV is the preferred metadata format for handoff and integration. The app reads `Shedd_Go_AltText_Drafts.csv` for full metadata or `Shedd_Go_AltText_Demo_Sample.csv` for a demo subset. XLSX remains supported as a fallback.
 
-The public repo includes a sample XLSX extracted from the original working spreadsheet. It only contains rows for the demo images in this repo.
+The public repo includes a sanitized fallback XLSX containing only rows for the demo images. Full-library metadata files stay outside the public repository.
 
-When the spreadsheet filename matches the image filename, the app can show the scientific name, display name, draft alt text, and source filename.
+When the metadata filename matches the image filename, the app uses the scientific name and source filename for display. Draft alt text remains attached to the image record and is applied to the HTML image `alt` attribute; it is not shown as visible result copy.
 
 This improves the gallery display, but it does not replace the color search logic. Search still uses the saved hex colors.
 
@@ -150,7 +150,7 @@ If This Became Production
 
 The core idea would stay the same:
 
-Cutout for preview and masking. Original image for real color extraction.
+Cutout for processing preview and masking. Original image for user-facing search display and real color extraction.
 
 The main production changes would be:
 

@@ -24,7 +24,7 @@ Why some choices changed during the demo:
 
 - Gemini background removal replaced the first local background-removal approach because the local cutouts were too harsh on detailed animals and corals.
 
-- Display thumbnails were added because transparent cutouts can have large invisible canvas space, which made animals appear visually far away from their labels in the gallery.
+- Trimmed cutout thumbnails were added for processing/review displays because transparent cutouts can have large invisible canvas space. User-facing search results use the original image.
 
 - The full color search view was added because the processing/review UI is useful for explaining the workflow, but too busy for the actual search demo.
 
@@ -92,7 +92,7 @@ Background-removed cutout PNGs.
 
 `data/thumbs/`
 
-Trimmed display thumbnails used in the result gallery.
+Trimmed cutout thumbnails retained for processing/review support. User-facing search results display the original animal image.
 
 
 Data Storage
@@ -225,7 +225,7 @@ The transparency result is stored in the cache, for example:
 
 Thumbnail Generation
 
-Gallery display uses thumbnails from:
+Processing/review support can use thumbnails from:
 
 `data/thumbs/`
 
@@ -233,13 +233,13 @@ Main function:
 
 `ensureDisplayThumbnail()`
 
-Some generated cutouts have a large transparent canvas around the animal. The thumbnail step trims that empty space and creates a better display image for the search gallery.
+Some generated cutouts have a large transparent canvas around the animal. The thumbnail step trims that empty space for processing/review displays.
 
 The thumbnail does not replace the processed cutout. It is only used for display.
 
 Reason for this step:
 
-Some processed PNGs have correct transparency but keep a large canvas around the animal. In the gallery, that invisible space made the animal image look disconnected from the name and match details below it. The thumbnail trims display whitespace while leaving the real processed cutout untouched.
+Some processed PNGs have correct transparency but keep a large canvas around the animal. The thumbnail trims display whitespace while leaving the real processed cutout untouched. The user-facing search gallery uses the original animal image rather than the cutout thumbnail.
 
 
 Color Extraction
@@ -380,11 +380,9 @@ Live search is designed to update while the user drags through the color wheel. 
 
 Spreadsheet Metadata
 
-The app can read:
+CSV is the preferred metadata format. The app reads `Shedd_Go_AltText_Drafts.csv` for full metadata or `Shedd_Go_AltText_Demo_Sample.csv` for a demo subset. XLSX remains supported as a fallback.
 
-`Shedd_Go_AltText_Demo_Sample.xlsx`
-
-The public repo includes a sample XLSX extracted from the original working spreadsheet. It only contains rows for the demo images in this repo.
+The public repo includes a sanitized fallback XLSX containing only rows for the demo images. Full-library metadata files stay outside the public repository.
 
 Main function:
 
@@ -395,9 +393,9 @@ The XLSX file is parsed with:
 - `fflate`
 - `fast-xml-parser`
 
-CSV metadata is also supported through `Shedd_Go_AltText_Drafts.csv` or `Shedd_Go_AltText_Demo_Sample.csv`. It uses the same filename-based join and accepts either the existing spreadsheet headers or short `filename` and `alt_text` headers. The built-in parser supports UTF-8 BOMs, quoted commas, escaped quotes, and quoted line breaks.
+CSV uses the same filename-based join and accepts either the existing spreadsheet headers or short `filename` and `alt_text` headers. The built-in parser supports UTF-8 BOMs, quoted commas, escaped quotes, and quoted line breaks.
 
-Rows are matched by original filename. When there is a match, the app can display:
+Rows are matched by original filename. When there is a match, the image record can include:
 
 - resource ID
 - attribution
@@ -406,7 +404,7 @@ Rows are matched by original filename. When there is a match, the app can displa
 - draft alt text
 - reviewed flag
 
-This metadata improves display, but color search still uses saved hex colors.
+This metadata improves naming and accessibility, but color search still uses saved hex colors. Draft alt text is applied to HTML image `alt` attributes and is not rendered as visible result copy.
 
 
 Quality Hints
