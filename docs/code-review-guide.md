@@ -9,6 +9,8 @@ Quick Summary
 
 This is a local Node/Express + vanilla JavaScript app.
 
+The current handoff is sized for approximately 1,200 images. The checked-in folders and cache contain a smaller processed demo subset so reviewers can run the workflow locally.
+
 The app:
 
 1. Reads animal images from `animals/`.
@@ -382,7 +384,7 @@ Spreadsheet Metadata
 
 CSV is the preferred metadata format. The app reads `Shedd_Go_AltText_Drafts.csv` for full metadata or `Shedd_Go_AltText_Demo_Sample.csv` for a demo subset. XLSX remains supported as a fallback.
 
-The public repo includes a sanitized fallback XLSX containing only rows for the demo images. Full-library metadata files stay outside the public repository.
+The full working metadata covers approximately 1,200 images. The public repo includes a sanitized fallback XLSX containing only rows for the checked-in demo images. Full-library metadata files stay outside the public repository.
 
 Main function:
 

@@ -4,6 +4,8 @@ Purpose
 
 This demo shows how someone could search an aquarium image collection by color.
 
+The current handoff scope is approximately 1,200 images. The checked-in image library remains a smaller processed demo subset.
+
 The user picks a color, and the app shows animals with the closest matching saved colors. The goal is not to capture every tiny color in every image. The goal is to save the colors a normal user would reasonably search for.
 
 Basic flow:
@@ -100,7 +102,7 @@ Spreadsheet Metadata
 
 CSV is the preferred metadata format for handoff and integration. The app reads `Shedd_Go_AltText_Drafts.csv` for full metadata or `Shedd_Go_AltText_Demo_Sample.csv` for a demo subset. XLSX remains supported as a fallback.
 
-The public repo includes a sanitized fallback XLSX containing only rows for the demo images. Full-library metadata files stay outside the public repository.
+The full working metadata covers approximately 1,200 images. The public repo includes a sanitized fallback XLSX containing only rows for the checked-in demo images. Full-library metadata files stay outside the public repository.
 
 When the metadata filename matches the image filename, the app uses the scientific name and source filename for display. Draft alt text remains attached to the image record and is applied to the HTML image `alt` attribute; it is not shown as visible result copy.
 
@@ -128,11 +130,11 @@ The cost scenarios combine one model choice with one submission mode.
 Cost estimates:
 
 ```txt
-Scenario              Per Image   100 Images    1,800 Images    Best Use
-Fast + Batch          $0.0168     about $1.68   about $30.24    Cheapest large first pass
-Fast + Standard       $0.0336     about $3.36   about $60.48    Small sets or live demo
-Detailed + Batch      $0.0340     about $3.40   about $61.20    Better cutouts in bulk
-Detailed + Standard   $0.0670     about $6.70   about $120.60   Immediate detailed processing
+Scenario              Per Image   100 Images    1,200 Images    Best Use
+Fast + Batch          $0.0168     about $1.68   about $20.16    Cheapest large first pass
+Fast + Standard       $0.0336     about $3.36   about $40.32    Small sets or live demo
+Detailed + Batch      $0.0340     about $3.40   about $40.80    Better cutouts in bulk
+Detailed + Standard   $0.0670     about $6.70   about $80.40    Immediate detailed processing
 ```
 
 Input token cost is additional, and actual cost can change with retries or future pricing changes.

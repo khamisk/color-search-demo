@@ -2,6 +2,8 @@
 
 Local demo for searching aquarium animal images by color.
 
+The handoff is sized for approximately 1,200 images. The files checked into this public repository are a smaller processed demo subset.
+
 ![Animal color search demo](docs/images/demo-preview.png)
 
 The included demo images have already been processed and reviewed, so reviewers can run the current demo without reprocessing images or using an API key.
@@ -46,7 +48,7 @@ Do not commit `.env`.
 
 This is a local MVP/demo, not production infrastructure.
 
-The included XLSX is a small sanitized fallback sample containing only the demo images. CSV is the preferred format for handoff and integration; XLSX remains supported so the checked-in demo runs with its existing reviewed alt text.
+The full working metadata covers approximately 1,200 images. The included XLSX is a small sanitized fallback sample containing only the checked-in demo images. CSV is the preferred format for handoff and integration; XLSX remains supported so the demo runs with its existing reviewed alt text.
 
 ## CSV Alt Text Metadata
 
