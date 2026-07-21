@@ -36,13 +36,31 @@ Do not commit `.env`.
 ## What's Included
 
 - `animals/` - original demo images
-- `data/processed/` - background-removed cutouts
-- `data/thumbs/` - trimmed cutout thumbnails for processing/review support
+- `data/masks/` - readable `OriginalName-mask.png` subject masks used for color analysis
 - `data/color-cache.json` - saved image/color metadata
 - `Shedd_Go_AltText_Demo_Sample.xlsx` - sanitized fallback metadata for the included demo images
 - `public/` - frontend HTML, CSS, and JavaScript
 - `server.js` - local Express server, image processing, and search API
 - `docs/` - design notes and code review guide
+
+## How Originals and Masks Are Linked
+
+`data/color-cache.json` is the manifest connecting each original image to its internal subject mask and searchable colors. A record begins like this:
+
+```json
+"35e43936501612d6": {
+  "sourceRelPath": "Abudefdufsaxatilis_Sergeantmajor.png",
+  "maskRelPath": "data/masks/Abudefdufsaxatilis_Sergeantmajor-mask.png",
+  "sourceHash": "9346a6b9..."
+}
+```
+
+- The 16-character object key is a stable internal ID derived from `sourceRelPath`. It is used by the API and UI; it is not an image filename.
+- `sourceRelPath` locates the displayed original inside `animals/`.
+- `maskRelPath` locates the readable internal mask used for color analysis.
+- `sourceHash` is a SHA-256 fingerprint of the original file contents. If the original changes without being renamed, the hash changes and the existing mask/colors are treated as stale.
+
+Renaming or moving an original changes its stable ID because its relative path changed. Editing the contents changes `sourceHash` but not the ID.
 
 ## Review Notes
 

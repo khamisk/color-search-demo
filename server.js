@@ -27,8 +27,7 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = __dirname;
 const ANIMALS_DIR = path.join(ROOT_DIR, "animals");
 const DATA_DIR = path.join(ROOT_DIR, "data");
-const PROCESSED_DIR = path.join(DATA_DIR, "processed");
-const THUMBS_DIR = path.join(DATA_DIR, "thumbs");
+const MASKS_DIR = path.join(DATA_DIR, "masks");
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const CACHE_FILE = path.join(DATA_DIR, "color-cache.json");
 const FULL_METADATA_CSV_FILE = path.join(ROOT_DIR, "Shedd_Go_AltText_Drafts.csv");
@@ -49,7 +48,7 @@ const CODEX_SERVICE_TIER = process.env.CODEX_SERVICE_TIER || "fast";
 const CODEX_REASONING_EFFORT = process.env.CODEX_REASONING_EFFORT || "low";
 const USE_CODEX_COLOR_ASSIGNMENT = process.env.USE_CODEX_COLOR_ASSIGNMENT === "1";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const DEFAULT_THRESHOLD = 18;
 const DEFAULT_PROCESS_MODEL = "gemini-lite";
 const PROCESS_MODELS = {
@@ -109,8 +108,6 @@ const app = express();
 
 app.use(express.json({ limit: "1mb" }));
 app.use("/animals", express.static(ANIMALS_DIR));
-app.use("/processed", express.static(PROCESSED_DIR));
-app.use("/thumbs", express.static(THUMBS_DIR));
 app.get("/favicon.ico", (_req, res) => res.status(204).end());
 app.use(express.static(PUBLIC_DIR));
 
@@ -178,7 +175,7 @@ app.post("/api/recolor", async (req, res, next) => {
     const records = await getAnimalRecords();
     const targets = requestedIds
       ? records.filter((animal) => requestedIds.has(animal.id))
-      : records.filter((animal) => animal.status === "processed" && animal.processedPath);
+      : records.filter((animal) => animal.status === "processed" && animal.maskPath);
 
     if (requestedIds && targets.length !== requestedIds.size) {
       res.status(404).json({ error: "One or more animal ids were not found." });
@@ -215,7 +212,7 @@ app.post("/api/colors/:id", async (req, res, next) => {
       return;
     }
 
-    if (!animal.processedPath) {
+    if (!animal.maskPath) {
       res.status(400).json({ error: "Process this animal before editing its colors." });
       return;
     }
@@ -226,7 +223,7 @@ app.post("/api/colors/:id", async (req, res, next) => {
       ...existingEntry,
       sourceRelPath: animal.sourceRelPath,
       sourceHash: animal.sourceHash,
-      processedRelPath: animal.processedRelPath || existingEntry.processedRelPath,
+      maskRelPath: animal.maskRelPath || existingEntry.maskRelPath,
       colors,
       colorSource: "manual",
       status: "processed",
@@ -321,8 +318,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
 
 async function ensureRuntimeFiles() {
   await fs.mkdir(ANIMALS_DIR, { recursive: true });
-  await fs.mkdir(PROCESSED_DIR, { recursive: true });
-  await fs.mkdir(THUMBS_DIR, { recursive: true });
+  await fs.mkdir(MASKS_DIR, { recursive: true });
   await fs.mkdir(DATA_DIR, { recursive: true });
 
   if (!fsSync.existsSync(CACHE_FILE)) {
@@ -668,13 +664,10 @@ async function getAnimalRecords() {
     const id = animalId(sourceRelPath);
     const cacheEntry = cache.animals[id];
     const cacheCurrent = Boolean(cacheEntry && cacheEntry.sourceRelPath === sourceRelPath && cacheEntry.sourceHash === sourceHash);
-    const processedPath = cacheCurrent && cacheEntry.processedRelPath
-      ? path.join(ROOT_DIR, cacheEntry.processedRelPath)
+    const maskPath = cacheCurrent && cacheEntry.maskRelPath
+      ? path.join(ROOT_DIR, cacheEntry.maskRelPath)
       : null;
-    const hasProcessedFile = Boolean(processedPath && fsSync.existsSync(processedPath));
-    const thumb = hasProcessedFile
-      ? await ensureDisplayThumbnail(processedPath, cacheEntry.updatedAt || sourceHash.slice(0, 10))
-      : null;
+    const hasMaskFile = Boolean(maskPath && fsSync.existsSync(maskPath));
     const colors = cacheCurrent ? normalizeColorList(cacheEntry.colors) : [];
     const status = cacheCurrent ? cacheEntry.status || "unprocessed" : "unprocessed";
 
@@ -687,11 +680,8 @@ async function getAnimalRecords() {
       sourceRelPath,
       sourceHash,
       originalUrl: `/animals/${urlPath(sourceRelPath)}?v=${sourceHash.slice(0, 10)}`,
-      processedPath: hasProcessedFile ? processedPath : null,
-      processedRelPath: hasProcessedFile ? normalizeRelPath(path.relative(ROOT_DIR, processedPath)) : null,
-      processedUrl: hasProcessedFile ? `/processed/${encodeURIComponent(path.basename(processedPath))}?v=${cacheEntry.updatedAt || sourceHash.slice(0, 10)}` : null,
-      thumbPath: thumb?.path || null,
-      thumbUrl: thumb?.url || null,
+      maskPath: hasMaskFile ? maskPath : null,
+      maskRelPath: hasMaskFile ? normalizeRelPath(path.relative(ROOT_DIR, maskPath)) : null,
       colors,
       status: status === "processed" && colors.length === 0 ? "error" : status,
       error: cacheCurrent ? cacheEntry.error || null : null,
@@ -735,46 +725,15 @@ async function listAnimalFiles(directory) {
   return files;
 }
 
-async function ensureDisplayThumbnail(processedPath, version) {
-  const fileName = path.basename(processedPath);
-  const thumbPath = path.join(THUMBS_DIR, fileName);
-
-  try {
-    const [processedStat, thumbStat] = await Promise.all([
-      fs.stat(processedPath),
-      fs.stat(thumbPath).catch(() => null)
-    ]);
-
-    if (!thumbStat || thumbStat.mtimeMs < processedStat.mtimeMs) {
-      await sharp(processedPath)
-        .ensureAlpha()
-        .trim({
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-          threshold: 8
-        })
-        .resize({ width: 900, height: 650, fit: "inside", withoutEnlargement: true })
-        .png()
-        .toFile(thumbPath);
-    }
-
-    return {
-      path: thumbPath,
-      url: `/thumbs/${encodeURIComponent(fileName)}?v=${encodeURIComponent(String(version || processedStat.mtimeMs))}`
-    };
-  } catch {
-    return null;
-  }
-}
-
 async function processAnimal(animal, cache, processModel = DEFAULT_PROCESS_MODEL) {
   const modelConfig = PROCESS_MODELS[processModel] || PROCESS_MODELS[DEFAULT_PROCESS_MODEL];
-  const processedFileName = `${animal.id}.png`;
-  const processedPath = path.join(PROCESSED_DIR, processedFileName);
-  const processedRelPath = normalizeRelPath(path.relative(ROOT_DIR, processedPath));
+  const maskFileName = maskFilename(animal.sourceRelPath);
+  const maskPath = path.join(MASKS_DIR, maskFileName);
+  const maskRelPath = normalizeRelPath(path.relative(ROOT_DIR, maskPath));
   const baseEntry = {
     sourceRelPath: animal.sourceRelPath,
     sourceHash: animal.sourceHash,
-    processedRelPath,
+    maskRelPath,
     backgroundModel: processModel,
     backgroundModelName: modelConfig.apiModel,
     processingProvider: "gemini",
@@ -795,8 +754,8 @@ async function processAnimal(animal, cache, processModel = DEFAULT_PROCESS_MODEL
       .toBuffer();
 
     const cutout = await removeBackgroundWithGemini(normalizedImage, processModel);
-    await fs.writeFile(processedPath, cutout.buffer);
-    const colors = await assignSearchableColors(animal.sourcePath, processedPath, cutout.buffer);
+    await fs.writeFile(maskPath, cutout.buffer);
+    const colors = await assignSearchableColors(animal.sourcePath, maskPath, cutout.buffer);
     cache.animals[animal.id] = {
       ...baseEntry,
       estimatedCostUsd: cutout.estimatedCostUsd,
@@ -817,18 +776,18 @@ async function processAnimal(animal, cache, processModel = DEFAULT_PROCESS_MODEL
 }
 
 async function recolorAnimal(animal, cache) {
-  if (!animal.processedPath || !fsSync.existsSync(animal.processedPath)) {
-    throw new Error(`${animal.name} does not have a processed image to recolor.`);
+  if (!animal.maskPath || !fsSync.existsSync(animal.maskPath)) {
+    throw new Error(`${animal.name} does not have a mask to recolor.`);
   }
 
   const existingEntry = cache.animals[animal.id] || {};
-  const processedBuffer = await fs.readFile(animal.processedPath);
-  const colors = await assignSearchableColors(animal.sourcePath, animal.processedPath, processedBuffer);
+  const maskBuffer = await fs.readFile(animal.maskPath);
+  const colors = await assignSearchableColors(animal.sourcePath, animal.maskPath, maskBuffer);
   cache.animals[animal.id] = {
     ...existingEntry,
     sourceRelPath: animal.sourceRelPath,
     sourceHash: animal.sourceHash,
-    processedRelPath: animal.processedRelPath || existingEntry.processedRelPath,
+    maskRelPath: animal.maskRelPath || existingEntry.maskRelPath,
     colors,
     colorSource: "auto",
     status: "processed",
@@ -1733,8 +1692,7 @@ function toPublicAnimal(animal) {
     metadata: animal.metadata,
     quality: animal.quality,
     originalUrl: animal.originalUrl,
-    processedUrl: animal.processedUrl,
-    thumbUrl: animal.thumbUrl,
+    hasMask: Boolean(animal.maskPath),
     colors: animal.colors,
     status: animal.status,
     backgroundModel: animal.backgroundModel,
@@ -1792,6 +1750,10 @@ function normalizeQualityReview(value) {
 
 function animalId(sourceRelPath) {
   return crypto.createHash("sha1").update(sourceRelPath).digest("hex").slice(0, 16);
+}
+
+function maskFilename(sourceRelPath) {
+  return `${nameFromRelPath(sourceRelPath)}-mask.png`;
 }
 
 function nameFromRelPath(sourceRelPath) {

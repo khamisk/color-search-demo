@@ -286,7 +286,7 @@ Three current images illustrate the edge cases behind these rules:
 | Problem | Prompt guardrail | Code guardrail |
 | --- | --- | --- |
 | Fine structures removed | Explicit branches, fins, tentacles, legs, hair, shell, texture, and translucency list | Use the detailed model for harder cases and retain QA/reprocessing controls. |
-| Subject clipped | "Do not crop" plus a small margin | Request the closest supported source aspect ratio to reduce reframing risk; trim only display thumbnails later. |
+| Subject clipped | "Do not crop" plus a small margin | Request the closest supported source aspect ratio to reduce reframing risk. |
 | Subject beautified or changed | Explicit no-blur, no-relight, no-recolor, no-stylize, no-reconstruction list | Reconcile cutout colors with original-source colors sampled through the mask. |
 | Aquarium context retained | Domain-specific removal list | No automatic semantic detector; manual QA or reprocessing is still required. |
 | Gray halo or regenerated background | Flat pure-white requirement with no shadow, texture, or scenery | Strict and near-white pixel tests plus edge-connected matte removal. |

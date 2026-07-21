@@ -21,7 +21,7 @@ What The Demo Shows
 
 There are two views:
 
-- Demo view: shows the full workflow, including the image library, processing, cutout preview, detected colors, and search.
+- Demo view: shows the full workflow, including the image library, original-image review, processing, detected colors, and search.
 - Full color search view: a cleaner search-only gallery. This is the main user-facing demo screen.
 
 The demo view is useful for explaining how the system prepares the images. The full color search view is the better screen for showing the final experience.
@@ -32,16 +32,18 @@ How Data Is Stored In The Demo
 This MVP stores everything locally.
 
 - Original uploaded images are stored in `animals/`.
-- Background-removed cutouts are stored in `data/processed/`.
-- Trimmed cutout thumbnails for processing/review support are stored in `data/thumbs/`.
+- Background-removed subject masks are stored as readable `OriginalName-mask.png` files in `data/masks/`.
 - Image status, detected colors, and processing metadata are stored in `data/color-cache.json`.
 
-The JSON file acts like a small local database for the demo. It does not store the actual image pixels. Instead, it stores references to the image files plus metadata about each image.
+The JSON file acts like a small local database and manifest for the demo. It does not store image pixels. Instead, each record explicitly links an original path to its mask path and stores metadata about processing and search.
+
+Each record is stored under a short stable ID derived from the original's relative path. That ID is for API/UI identity, not for naming image files. The record also stores a SHA-256 `sourceHash` of the original file contents. The ID detects path identity; `sourceHash` detects a changed image at the same path.
 
 For each animal, the JSON cache stores things like:
 
 - original filename
-- processed cutout filename
+- internal subject-mask filename
+- source-content fingerprint
 - detected searchable hex colors
 - processing status
 - background removal model used
@@ -54,17 +56,22 @@ Example of the kind of color data stored:
 
 For production, this JSON file would likely become a real database, while images would move to cloud storage.
 
+Example relationship:
+
+```json
+"35e43936501612d6": {
+  "sourceRelPath": "Abudefdufsaxatilis_Sergeantmajor.png",
+  "maskRelPath": "data/masks/Abudefdufsaxatilis_Sergeantmajor-mask.png",
+  "sourceHash": "9346a6b9..."
+}
+```
+
 
 How Background Removal Works
 
 The app uses Gemini image editing to remove the background.
 
-The background-removed image is used for two things:
-
-- to show a clean animal preview
-- to create a mask showing where the animal is
-
-The mask is important because it tells the app which parts of the original image belong to the animal and which parts are background.
+The background-removed image is retained only as an internal subject mask. It tells the app which parts of the original image belong to the animal and which parts are background; it is not used as a displayed animal image.
 
 
 How Colors Are Chosen
@@ -152,7 +159,7 @@ If This Became Production
 
 The core idea would stay the same:
 
-Cutout for processing preview and masking. Original image for user-facing search display and real color extraction.
+Internal mask for processing. Original image for review, user-facing search display, and real color extraction.
 
 The main production changes would be:
 

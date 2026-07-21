@@ -5,7 +5,6 @@ const state = {
   libraryFilter: "all",
   libraryQuery: "",
   busy: false,
-  previewImageView: "transparent",
   hsv: { h: 22, s: 0.51, v: 0.55 }
 };
 
@@ -496,7 +495,7 @@ function colorMarkup(colors, options = {}) {
 }
 
 function colorSourceText(animal) {
-  if (!animal?.processedUrl) {
+  if (!animal?.hasMask) {
     return "Process the image first to generate searchable colors.";
   }
 
@@ -508,7 +507,7 @@ function colorSourceText(animal) {
 }
 
 function updateColorEditorState(animal = selectedAnimalRecord()) {
-  const canEdit = Boolean(animal?.processedUrl);
+  const canEdit = Boolean(animal?.hasMask);
   const canUndo = Boolean(animal && colorUndoStack.at(-1)?.id === animal.id);
 
   addColorButton.disabled = state.busy || !canEdit;
@@ -615,6 +614,37 @@ function resultColorMarkup(colors) {
 
 function resultImageAlt(animal) {
   return animal?.metadata?.altTextDraft || primaryAnimalName(animal);
+}
+
+const SHOW_ALT_TEXT_BUTTON = true;
+
+function resultAltControlMarkup(animal) {
+  const description = animal?.metadata?.altTextDraft;
+  if (!SHOW_ALT_TEXT_BUTTON || !description) {
+    return "";
+  }
+
+  const panelId = `result-alt-${animal.id}`;
+  const animalName = primaryAnimalName(animal);
+  return `
+    <details class="result-alt-control">
+      <summary
+        class="result-alt-toggle"
+        aria-controls="${escapeHtml(panelId)}"
+        aria-label="Show image description for ${escapeHtml(animalName)}"
+        title="Show image description"
+      >ALT</summary>
+      <div
+        class="result-alt-panel"
+        id="${escapeHtml(panelId)}"
+        role="note"
+        aria-label="Image description for ${escapeHtml(animalName)}"
+      >
+        <span class="result-alt-title">Image description</span>
+        <p>${escapeHtml(description)}</p>
+      </div>
+    </details>
+  `;
 }
 
 function selectedAnimalRecord() {
@@ -844,32 +874,12 @@ function renderSelectedAnimal() {
   selectedAnimal.innerHTML = `
     ${metadataBlockMarkup(animal)}
     ${qualityMarkup(animal)}
-    <div class="image-pair">
+    <div class="selected-image-preview">
       <figure>
         <figcaption>Original</figcaption>
         <div class="image-frame">
           <img src="${escapeHtml(animal.originalUrl)}" alt="${escapeHtml(resultImageAlt(animal))}">
         </div>
-      </figure>
-      <figure class="processed-preview-figure">
-        ${animal.processedUrl ? `
-          <figcaption class="processed-preview-caption">
-            <span>Processed preview</span>
-            <div class="segmented preview-background-toggle" role="group" aria-label="Processed preview background">
-              <button type="button" data-preview-image-view="transparent" class="${state.previewImageView === "transparent" ? "active" : ""}" aria-pressed="${state.previewImageView === "transparent"}">Transparent</button>
-              <button type="button" data-preview-image-view="original" class="${state.previewImageView === "original" ? "active" : ""}" aria-pressed="${state.previewImageView === "original"}">Original</button>
-            </div>
-          </figcaption>
-          <div class="image-frame processed-image-preview">
-            <div class="processed-preview-stage" data-preview-mode="${state.previewImageView}">
-              <img class="preview-image-cutout" src="${escapeHtml(animal.processedUrl)}" alt="${escapeHtml(animal.name)} background removed">
-              <img class="preview-image-original" src="${escapeHtml(animal.originalUrl)}" alt="${escapeHtml(animal.name)} in its original setting">
-            </div>
-          </div>
-        ` : `
-          <figcaption>Processed preview</figcaption>
-          <div class="image-frame">Not processed</div>
-        `}
       </figure>
     </div>
     ${animal.error ? `<p>${escapeHtml(animal.error)}</p>` : ""}
@@ -922,6 +932,7 @@ function renderResults(matches) {
     <article class="result-tile">
       <div class="result-image">
         <img class="result-image-original" src="${escapeHtml(match.originalUrl)}" alt="${escapeHtml(resultImageAlt(match))}">
+        ${resultAltControlMarkup(match)}
       </div>
       <div class="result-info">
         <h4 title="${escapeHtml(primaryAnimalName(match))}">${escapeHtml(primaryAnimalName(match))}</h4>
@@ -1329,7 +1340,7 @@ async function saveQualityReview(reviewState) {
 
 async function chooseManualColor() {
   const animal = selectedAnimalRecord();
-  if (!animal?.processedUrl) {
+  if (!animal?.hasMask) {
     setStatus("Process this animal before adding colors.");
     return;
   }
@@ -1473,13 +1484,6 @@ animalList.addEventListener("click", (event) => {
 });
 
 selectedAnimal.addEventListener("click", (event) => {
-  const previewButton = event.target.closest("[data-preview-image-view]");
-  if (previewButton) {
-    state.previewImageView = previewButton.dataset.previewImageView;
-    renderSelectedAnimal();
-    return;
-  }
-
   const button = event.target.closest("[data-quality-action]");
   if (!button) {
     return;
@@ -1537,7 +1541,7 @@ refreshColorsButton.addEventListener("click", async () => {
   }
 
   const animal = selectedAnimalRecord();
-  if (!animal?.processedUrl) {
+  if (!animal?.hasMask) {
     setStatus("Process this animal before refreshing colors.");
     return;
   }
@@ -1564,7 +1568,7 @@ refreshColorsButton.addEventListener("click", async () => {
 });
 
 updateAllColorsButton.addEventListener("click", async () => {
-  const processedCount = state.animals.filter((animal) => animal.status === "processed" && animal.processedUrl).length;
+  const processedCount = state.animals.filter((animal) => animal.status === "processed" && animal.hasMask).length;
   if (processedCount === 0) {
     setStatus("No processed animals have cutouts to update.");
     return;
