@@ -33,6 +33,17 @@ GEMINI_API_KEY=your_key_here
 
 Do not commit `.env`.
 
+The Process panel has two submission modes:
+
+- `Standard · immediate` processes images now and is best for a single image or a live review.
+- `Batch · lower cost` submits asynchronous Gemini Batch jobs and is intended for a large library run such as the approximately 1,200-image handoff. Batch results can take up to 24 hours. The server keeps polling while it is running, imports completed cutouts into the existing mask/color pipeline, and records per-image failures for review.
+
+Batch job metadata is stored locally in the ignored `data/batch-jobs.json` file. The default provider group size is 100 requests and can be changed with `GEMINI_BATCH_GROUP_SIZE`.
+
+### Receiving Batch Results
+
+Gemini does not email the finished images. When a batch completes, the running server downloads Gemini's results file automatically, saves each generated subject mask in `data/masks/`, runs the existing color extraction, and updates `data/color-cache.json`. The Process panel then reports how many images are ready or failed. If the server was stopped while Gemini worked, restart it and the saved batch-job metadata will let it resume checking and importing results.
+
 ## What's Included
 
 - `animals/` - original demo images

@@ -48,8 +48,19 @@
                 <option value="gemini-flash">Detailed cutout</option>
               </select>
             </label>
+            <label class="model-control" for="processing-mode-select">
+              <span>Submission</span>
+              <select id="processing-mode-select">
+                <option value="standard" selected>Standard · immediate</option>
+                <option value="batch">Batch · lower cost</option>
+              </select>
+            </label>
             <button id="process-batch-button" type="button">Process checked</button>
             <button id="process-all-button" type="button">Process unprocessed</button>
+            <div id="batch-job-status" class="batch-job-status" hidden>
+              <p id="batch-job-copy"></p>
+              <button id="cancel-batch-button" type="button">Cancel batch</button>
+            </div>
           </div>
         </details>
       </section>

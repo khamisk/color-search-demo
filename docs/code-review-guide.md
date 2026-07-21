@@ -194,7 +194,11 @@ Processing steps:
 4. Extract searchable colors.
 5. Save all processing metadata into `data/color-cache.json`.
 
-Processing is currently sequential. After each animal is processed, the cache is written so progress is not lost if a later image fails.
+Standard processing remains sequential and writes the cache after every animal so progress is not lost if a later image fails. The optional Batch submission mode groups large libraries into asynchronous Gemini Batch jobs. Completed batch images return to the same local cutout preparation and color extraction functions, so submission mode does not create a separate image-quality pipeline.
+
+Batch job state is persisted in ignored `data/batch-jobs.json`. The server resumes active jobs after restart, polls Gemini, downloads completed JSONL results, maps each result to the stable animal ID, and records failures per image. The default group size is 100 requests to keep a 1,200-image run manageable.
+
+There is no separate email or manual-download delivery step. After Gemini reports success, the server downloads the provider results file, decodes each returned image, writes the subject mask to `data/masks/`, runs the normal color extraction, and updates `data/color-cache.json`. The frontend reflects those imported records as ready or failed. The Node server must be running for automatic polling and import; if it was stopped, restarting it resumes work from `data/batch-jobs.json`.
 
 
 Background Removal
@@ -425,6 +429,22 @@ Uploads images into `animals/`.
 
 Runs background removal and color extraction.
 
+`GET /api/process-batches`
+
+Lists locally tracked Gemini batch jobs.
+
+`POST /api/process-batches`
+
+Submits selected or unprocessed images for asynchronous Gemini Batch processing.
+
+`GET /api/process-batches/:id`
+
+Refreshes one batch, imports completed results, and returns current progress.
+
+`POST /api/process-batches/:id/cancel`
+
+Cancels the provider jobs belonging to a local batch.
+
 `POST /api/recolor`
 
 Recalculates colors for already processed animals without re-running background removal.
@@ -447,7 +467,7 @@ Known MVP Limitations
 - local-only app
 - JSON file instead of database
 - no authentication
-- sequential processing
+- standard processing is sequential; large runs require the asynchronous Batch option
 - targeted automated coverage for color extraction only; most server and frontend flows still rely on manual checks
 - Gemini output quality can vary
 - color extraction is heuristic
