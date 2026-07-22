@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  PermanentBatchError,
   buildGeminiBatchRequest,
   imageResultFromBatchEntry,
+  isRetryableBatchError,
+  outstandingBatchAnimalIds,
   parseGeminiBatchResults,
+  providerBatchDisplayName,
   summarizeBatchJob
 } from "../batch-processing.js";
 
@@ -72,4 +76,23 @@ test("invalid JSONL reports the failing line", () => {
     () => parseGeminiBatchResults('{"key":"ok"}\nnot-json'),
     /line 2 is invalid JSON/
   );
+});
+
+test("batch retry classification separates transient provider errors from permanent input errors", () => {
+  assert.equal(isRetryableBatchError(new Error("connection reset")), true);
+  assert.equal(isRetryableBatchError({ status: 429, message: "rate limited" }), true);
+  assert.equal(isRetryableBatchError({ statusCode: 503, message: "unavailable" }), true);
+  assert.equal(isRetryableBatchError({ status: 400, message: "invalid request" }), false);
+  assert.equal(isRetryableBatchError(new PermanentBatchError("source changed")), false);
+});
+
+test("provider display names are deterministic and unfinished ids exclude completed groups", () => {
+  assert.equal(providerBatchDisplayName("local-job", 3), "shedd-cutouts-local-job-3");
+  assert.deepEqual(outstandingBatchAnimalIds({
+    groups: [
+      { animalIds: ["a", "b"], imported: true },
+      { animalIds: ["b", "c"], error: null },
+      { animalIds: ["d"], error: "provider rejected input" }
+    ]
+  }), ["b", "c"]);
 });

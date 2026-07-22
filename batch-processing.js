@@ -9,6 +9,21 @@ const PROVIDER_TERMINAL_STATES = new Set([
   ...PROVIDER_FAILURE_STATES
 ]);
 
+const PERMANENT_PROVIDER_CODES = new Set([
+  "INVALID_ARGUMENT",
+  "PERMISSION_DENIED",
+  "UNAUTHENTICATED",
+  "FAILED_PRECONDITION"
+]);
+
+class PermanentBatchError extends Error {
+  constructor(message, options = {}) {
+    super(message, options);
+    this.name = "PermanentBatchError";
+    this.retryable = false;
+  }
+}
+
 function buildGeminiBatchRequest({ key, prompt, imageBase64, aspectRatio }) {
   return {
     key,
@@ -91,6 +106,47 @@ function batchErrorMessage(error) {
   return String(error?.message || error?.status || "Gemini batch request failed.");
 }
 
+function isRetryableBatchError(error) {
+  if (error?.retryable === false) {
+    return false;
+  }
+
+  const providerCode = String(error?.code || error?.status || "").toUpperCase();
+  if (PERMANENT_PROVIDER_CODES.has(providerCode)) {
+    return false;
+  }
+
+  const status = Number(error?.statusCode || error?.response?.status || error?.status);
+  if (Number.isFinite(status)) {
+    return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+  }
+
+  return true;
+}
+
+function providerBatchDisplayName(jobId, groupIndex) {
+  return `shedd-cutouts-${String(jobId)}-${Number(groupIndex)}`;
+}
+
+function outstandingBatchAnimalIds(job) {
+  const ids = [];
+  const seen = new Set();
+  for (const group of Array.isArray(job?.groups) ? job.groups : []) {
+    if (group?.imported || group?.error) {
+      continue;
+    }
+
+    for (const animalId of Array.isArray(group?.animalIds) ? group.animalIds : []) {
+      const normalizedId = String(animalId);
+      if (!seen.has(normalizedId)) {
+        seen.add(normalizedId);
+        ids.push(normalizedId);
+      }
+    }
+  }
+  return ids;
+}
+
 function providerStateName(value) {
   if (typeof value === "string") {
     return value;
@@ -127,18 +183,23 @@ function summarizeBatchJob(job) {
     failed,
     groupCount: groups.length,
     completedGroups: terminalGroups,
-    error: job.error || null
+    nextRetryAt: job.nextRetryAt || null,
+    error: job.error || job.lastTransientError || null
   };
 }
 
 export {
   PROVIDER_SUCCESS_STATE,
+  PermanentBatchError,
   batchErrorMessage,
   buildGeminiBatchRequest,
   imageResultFromBatchEntry,
+  isRetryableBatchError,
   isProviderFailureState,
   isProviderTerminalState,
+  outstandingBatchAnimalIds,
   parseGeminiBatchResults,
+  providerBatchDisplayName,
   providerStateName,
   summarizeBatchJob
 };

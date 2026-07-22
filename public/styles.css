@@ -187,6 +187,23 @@ header p,
   display: none;
 }
 
+.batch-job-list {
+  display: grid;
+  gap: 8px;
+}
+
+.batch-job-row {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.batch-job-row + .batch-job-row {
+  border-top: 1px solid #ecece7;
+  padding-top: 8px;
+}
+
 .batch-job-status p {
   color: #555;
   font-size: 12px;

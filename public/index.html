@@ -57,9 +57,8 @@
             </label>
             <button id="process-batch-button" type="button">Process checked</button>
             <button id="process-all-button" type="button">Process unprocessed</button>
-            <div id="batch-job-status" class="batch-job-status" hidden>
-              <p id="batch-job-copy"></p>
-              <button id="cancel-batch-button" type="button">Cancel batch</button>
+            <div id="batch-job-status" class="batch-job-status" role="status" aria-live="polite" hidden>
+              <div id="batch-job-list" class="batch-job-list"></div>
             </div>
           </div>
         </details>

@@ -23,12 +23,16 @@ import {
 } from "./color-extraction-helpers.js";
 import {
   PROVIDER_SUCCESS_STATE,
+  PermanentBatchError,
   batchErrorMessage,
   buildGeminiBatchRequest,
   imageResultFromBatchEntry,
+  isRetryableBatchError,
   isProviderFailureState,
   isProviderTerminalState,
+  outstandingBatchAnimalIds,
   parseGeminiBatchResults,
+  providerBatchDisplayName,
   providerStateName,
   summarizeBatchJob
 } from "./batch-processing.js";
@@ -36,8 +40,8 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = __dirname;
-const ANIMALS_DIR = path.join(ROOT_DIR, "animals");
-const DATA_DIR = path.join(ROOT_DIR, "data");
+const ANIMALS_DIR = configuredPath("SHEDD_ANIMALS_DIR", path.join(ROOT_DIR, "animals"));
+const DATA_DIR = configuredPath("SHEDD_DATA_DIR", path.join(ROOT_DIR, "data"));
 const MASKS_DIR = path.join(DATA_DIR, "masks");
 const BATCH_TMP_DIR = path.join(DATA_DIR, "tmp", "batches");
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
@@ -80,6 +84,9 @@ const ALLOWED_PROCESS_MODELS = new Set(Object.keys(PROCESS_MODELS));
 const BATCH_JOB_VERSION = 1;
 const BATCH_GROUP_SIZE = clampInteger(process.env.GEMINI_BATCH_GROUP_SIZE, 1, 200, 100);
 const BATCH_MONITOR_INTERVAL_MS = clampInteger(process.env.GEMINI_BATCH_POLL_MS, 10_000, 300_000, 30_000);
+const BATCH_MAX_RETRIES = clampInteger(process.env.GEMINI_BATCH_MAX_RETRIES, 1, 20, 5);
+const BATCH_RETRY_BASE_MS = clampInteger(process.env.GEMINI_BATCH_RETRY_MS, 10, 300_000, 5_000);
+const BATCH_MAX_INPUT_BYTES = clampInteger(process.env.GEMINI_BATCH_MAX_FILE_MB, 1, 1_900, 1_800) * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif"]);
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 const HEX_RE = /^#[0-9A-F]{6}$/;
@@ -176,17 +183,23 @@ app.post("/api/process", async (req, res, next) => {
     const records = await getAnimalRecords();
     const targets = requestedIds
       ? records.filter((animal) => requestedIds.has(animal.id))
-      : records.filter((animal) => animal.status !== "processed");
+      : records.filter((animal) => animal.status !== "processed" && !isActiveBatchStatus(animal.batchStatus));
 
     if (requestedIds && targets.length !== requestedIds.size) {
       res.status(404).json({ error: "One or more animal ids were not found." });
       return;
     }
 
-    const cache = await readCache();
+    if (targets.some((animal) => isActiveBatchStatus(animal.batchStatus))) {
+      res.status(409).json({ error: "One or more selected animals are already in an active batch." });
+      return;
+    }
+
     for (const animal of targets) {
-      await processAnimal(animal, cache, processModel);
-      await writeCache(cache);
+      const entry = await processAnimal(animal, processModel);
+      await mutateCache((cache) => {
+        replaceProcessedCacheEntry(cache, animal.id, entry);
+      });
     }
 
     res.json({
@@ -201,11 +214,16 @@ app.post("/api/process", async (req, res, next) => {
 
 app.get("/api/process-batches", async (_req, res, next) => {
   try {
+    // Schedule due work, but do not make a status poll wait for uploads or imports.
+    await resumeBatchJobs();
     const store = await readBatchJobs();
     const batches = Object.values(store.jobs)
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
       .map(summarizeBatchJob);
-    res.json({ batches });
+    res.json({
+      batches,
+      animals: (await getAnimalRecords()).map(toPublicAnimal)
+    });
   } catch (error) {
     next(error);
   }
@@ -266,8 +284,15 @@ app.get("/api/process-batches/:id", async (req, res, next) => {
       return;
     }
 
-    if (!activeBatchTasks.has(jobId)) {
-      await queueBatchTask(jobId, () => refreshLocalBatchJob(jobId));
+    const nextRetryAt = Date.parse(initialStore.jobs[jobId].nextRetryAt || "");
+    const retryReady = !Number.isFinite(nextRetryAt) || nextRetryAt <= Date.now();
+    if (!activeBatchTasks.has(jobId) && retryReady) {
+      const initialJob = initialStore.jobs[jobId];
+      await queueBatchTask(jobId, () => (
+        initialJob.cancelRequested
+          ? cancelLocalBatchJob(jobId)
+          : hasUnsubmittedBatchGroups(initialJob) ? submitLocalBatchJob(jobId) : refreshLocalBatchJob(jobId)
+      ));
     }
     const store = await readBatchJobs();
     res.json({
@@ -282,17 +307,30 @@ app.get("/api/process-batches/:id", async (req, res, next) => {
 app.post("/api/process-batches/:id/cancel", async (req, res, next) => {
   try {
     const jobId = String(req.params.id);
+    const initialStore = await readBatchJobs();
+    const initialJob = initialStore.jobs[jobId];
+    if (!initialJob) {
+      res.status(404).json({ error: "Batch job was not found." });
+      return;
+    }
+    if (["succeeded", "partial", "failed", "cancelled"].includes(initialJob.state)) {
+      res.json({ batch: summarizeBatchJob(initialJob) });
+      return;
+    }
+
+    await mutateBatchJobs((store) => {
+      const job = store.jobs[jobId];
+      if (job) {
+        job.cancelRequested = true;
+        job.updatedAt = new Date().toISOString();
+      }
+    });
     if (activeBatchTasks.has(jobId)) {
       await activeBatchTasks.get(jobId);
     }
     await queueBatchTask(jobId, () => cancelLocalBatchJob(jobId));
     const store = await readBatchJobs();
     const job = store.jobs[jobId];
-    if (!job) {
-      res.status(404).json({ error: "Batch job was not found." });
-      return;
-    }
-
     res.json({ batch: summarizeBatchJob(job) });
   } catch (error) {
     next(error);
@@ -312,10 +350,8 @@ app.post("/api/recolor", async (req, res, next) => {
       return;
     }
 
-    const cache = await readCache();
     for (const animal of targets) {
-      await recolorAnimal(animal, cache);
-      await writeCache(cache);
+      await recolorAnimal(animal);
     }
 
     res.json({
@@ -347,20 +383,20 @@ app.post("/api/colors/:id", async (req, res, next) => {
       return;
     }
 
-    const cache = await readCache();
-    const existingEntry = cache.animals[animal.id] || {};
-    cache.animals[animal.id] = {
-      ...existingEntry,
-      sourceRelPath: animal.sourceRelPath,
-      sourceHash: animal.sourceHash,
-      maskRelPath: animal.maskRelPath || existingEntry.maskRelPath,
-      colors,
-      colorSource: "manual",
-      status: "processed",
-      error: null,
-      updatedAt: new Date().toISOString()
-    };
-    await writeCache(cache);
+    await mutateCache((cache) => {
+      const existingEntry = cache.animals[animal.id] || {};
+      cache.animals[animal.id] = {
+        ...existingEntry,
+        sourceRelPath: animal.sourceRelPath,
+        sourceHash: animal.sourceHash,
+        maskRelPath: animal.maskRelPath || existingEntry.maskRelPath,
+        colors,
+        colorSource: "manual",
+        status: "processed",
+        error: null,
+        updatedAt: new Date().toISOString()
+      };
+    });
 
     res.json({
       animals: (await getAnimalRecords()).map(toPublicAnimal),
@@ -381,19 +417,19 @@ app.post("/api/quality/:id", async (req, res, next) => {
       return;
     }
 
-    const cache = await readCache();
-    const existingEntry = cache.animals[animal.id] || {};
-    cache.animals[animal.id] = {
-      ...existingEntry,
-      sourceRelPath: animal.sourceRelPath,
-      sourceHash: animal.sourceHash,
-      qualityReview: reviewState,
-      updatedAt: new Date().toISOString()
-    };
-    if (!reviewState) {
-      delete cache.animals[animal.id].qualityReview;
-    }
-    await writeCache(cache);
+    await mutateCache((cache) => {
+      const existingEntry = cache.animals[animal.id] || {};
+      cache.animals[animal.id] = {
+        ...existingEntry,
+        sourceRelPath: animal.sourceRelPath,
+        sourceHash: animal.sourceHash,
+        qualityReview: reviewState,
+        updatedAt: new Date().toISOString()
+      };
+      if (!reviewState) {
+        delete cache.animals[animal.id].qualityReview;
+      }
+    });
 
     res.json({
       animals: (await getAnimalRecords()).map(toPublicAnimal)
@@ -914,18 +950,7 @@ function createLocalBatchJob(targets, processModel) {
   const groups = [];
   for (let index = 0; index < targets.length; index += BATCH_GROUP_SIZE) {
     const animals = targets.slice(index, index + BATCH_GROUP_SIZE);
-    groups.push({
-      index: groups.length,
-      animalIds: animals.map((animal) => animal.id),
-      providerJobName: null,
-      providerInputFileName: null,
-      providerOutputFileName: null,
-      providerState: null,
-      imported: false,
-      importedCount: 0,
-      failedCount: 0,
-      error: null
-    });
+    groups.push(createBatchGroup(id, groups.length, animals.map((animal) => animal.id)));
   }
 
   return {
@@ -937,12 +962,36 @@ function createLocalBatchJob(targets, processModel) {
     groups,
     createdAt: now,
     updatedAt: now,
+    consecutiveErrors: 0,
+    nextRetryAt: null,
+    lastTransientError: null,
+    error: null
+  };
+}
+
+function createBatchGroup(jobId, index, animalIds) {
+  return {
+    index,
+    animalIds: animalIds.map(String),
+    providerDisplayName: providerBatchDisplayName(jobId, index),
+    providerJobName: null,
+    providerInputFileName: null,
+    providerCreateAttemptedAt: null,
+    providerOutputFileName: null,
+    providerState: null,
+    imported: false,
+    importedCount: 0,
+    failedCount: 0,
     error: null
   };
 }
 
 function isActiveBatchStatus(status) {
   return ["queued", "preparing", "submitted", "running", "importing"].includes(String(status || ""));
+}
+
+function hasUnsubmittedBatchGroups(job) {
+  return Array.isArray(job?.groups) && job.groups.some((group) => !group.providerJobName && !group.error);
 }
 
 async function markAnimalsForBatch(animals, jobId) {
@@ -983,16 +1032,56 @@ function queueBatchTask(jobId, task) {
 
   const operation = Promise.resolve()
     .then(task)
-    .catch(async (error) => {
-      console.error(`Batch ${jobId} failed: ${error.message}`);
+    .then(async (result) => {
       await mutateBatchJobs((store) => {
         const job = store.jobs[jobId];
-        if (job && job.state !== "cancelled") {
-          job.state = "failed";
-          job.error = error.message || "Batch processing failed.";
-          job.updatedAt = new Date().toISOString();
+        if (!job) {
+          return;
         }
+        job.consecutiveErrors = 0;
+        job.nextRetryAt = null;
+        job.lastTransientError = null;
       });
+      return result;
+    })
+    .catch(async (error) => {
+      console.error(`Batch ${jobId} failed: ${error.message}`);
+      const failure = await mutateBatchJobs((store) => {
+        const job = store.jobs[jobId];
+        if (!job || job.state === "cancelled") {
+          return null;
+        }
+
+        const message = error.message || "Batch processing failed.";
+        const attempt = Number(job.consecutiveErrors || 0) + 1;
+        const canRetry = isRetryableBatchError(error) && attempt < BATCH_MAX_RETRIES;
+        job.consecutiveErrors = attempt;
+        job.updatedAt = new Date().toISOString();
+
+        if (canRetry) {
+          const retryDelay = Math.min(BATCH_RETRY_BASE_MS * (2 ** (attempt - 1)), 300_000);
+          job.nextRetryAt = new Date(Date.now() + retryDelay).toISOString();
+          job.lastTransientError = `Temporary batch error; retry ${attempt}/${BATCH_MAX_RETRIES - 1}: ${message}`;
+          return { terminal: false, animalIds: [] };
+        }
+
+        const animalIds = outstandingBatchAnimalIds(job);
+        for (const group of job.groups) {
+          if (!group.imported && !group.error) {
+            group.error = message;
+            group.failedCount = group.animalIds.length;
+          }
+        }
+        job.state = "failed";
+        job.nextRetryAt = null;
+        job.lastTransientError = null;
+        job.error = message;
+        return { terminal: true, animalIds, message };
+      });
+
+      if (failure?.terminal && failure.animalIds.length > 0) {
+        await setAnimalBatchState(failure.animalIds, jobId, "error", failure.message);
+      }
     })
     .finally(() => {
       activeBatchTasks.delete(jobId);
@@ -1012,61 +1101,99 @@ async function submitLocalBatchJob(jobId) {
   const recordsById = new Map(records.map((animal) => [animal.id, animal]));
   const client = getGeminiClient();
   const modelConfig = PROCESS_MODELS[job.model] || PROCESS_MODELS[DEFAULT_PROCESS_MODEL];
+  const pendingGroups = job.groups.filter((group) => !group.providerJobName && !group.error);
+  const providerJobsByDisplayName = pendingGroups.length > 0
+    ? await listProviderBatchesByDisplayName(client)
+    : new Map();
 
-  for (const group of job.groups) {
+  for (let groupIndex = 0; groupIndex < job.groups.length; groupIndex += 1) {
+    const group = job.groups[groupIndex];
+    if (await isBatchCancellationRequested(job.id)) {
+      break;
+    }
     if (group.providerJobName || group.error) {
       continue;
     }
 
+    const displayName = group.providerDisplayName || providerBatchDisplayName(job.id, group.index);
     const batchFilePath = path.join(BATCH_TMP_DIR, `${job.id}-${group.index}.jsonl`);
     try {
-      const lines = [];
-      for (const animalId of group.animalIds) {
-        const animal = recordsById.get(animalId);
-        if (!animal || animal.sourceHash !== job.sourceHashes[animalId]) {
-          throw new Error(`Source image ${animalId} changed or is no longer available.`);
-        }
-
-        const normalizedImage = await normalizeImageForGemini(animal.sourcePath);
-        const metadata = await sharp(normalizedImage).metadata();
-        lines.push(JSON.stringify(buildGeminiBatchRequest({
-          key: animal.id,
-          prompt: BACKGROUND_REMOVAL_PROMPT,
-          imageBase64: normalizedImage.toString("base64"),
-          aspectRatio: closestAspectRatio(metadata.width || 1, metadata.height || 1)
-        })));
+      const recoveredJob = providerJobsByDisplayName.get(displayName);
+      if (recoveredJob) {
+        await attachProviderBatchJob(job, group, recoveredJob, group.providerInputFileName);
+        await setAnimalBatchState(group.animalIds, job.id, "submitted");
+        continue;
       }
 
-      await fs.writeFile(batchFilePath, `${lines.join("\n")}\n`, "utf8");
-      const uploadedFile = await client.files.upload({
-        file: batchFilePath,
-        config: {
-          mimeType: "application/jsonl",
-          displayName: `shedd-${job.id}-${group.index}`
-        }
-      });
-      const providerJob = await client.batches.create({
-        model: modelConfig.apiModel,
-        src: uploadedFile.name,
-        config: {
-          displayName: `shedd-cutouts-${job.id}-${group.index}`
-        }
-      });
+      if (group.providerCreateAttemptedAt) {
+        const uncertainError = new Error(
+          `Gemini has not listed the earlier create attempt for ${displayName} yet; waiting instead of risking a duplicate submission.`
+        );
+        uncertainError.code = "BATCH_CREATE_UNCERTAIN";
+        throw uncertainError;
+      }
 
+      let providerInputFileName = group.providerInputFileName;
+      if (!providerInputFileName) {
+        const splitGroup = await writeBatchGroupJsonl(job, group, recordsById, batchFilePath);
+        if (splitGroup) {
+          job.groups.push(splitGroup);
+        }
+
+        const uploadedFile = await client.files.upload({
+          file: batchFilePath,
+          config: {
+            mimeType: "application/jsonl",
+            displayName: `shedd-${job.id}-${group.index}`
+          }
+        });
+        providerInputFileName = uploadedFile.name;
+        if (!providerInputFileName) {
+          throw new PermanentBatchError("Gemini did not return a name for the uploaded batch input file.");
+        }
+
+        await mutateBatchJobs((latestStore) => {
+          const latestJob = latestStore.jobs[job.id];
+          const latestGroup = latestJob?.groups?.find((candidate) => candidate.index === group.index);
+          if (latestGroup) {
+            latestGroup.providerDisplayName = displayName;
+            latestGroup.providerInputFileName = providerInputFileName;
+            latestJob.updatedAt = new Date().toISOString();
+          }
+        });
+      }
+
+      if (await isBatchCancellationRequested(job.id)) {
+        break;
+      }
+
+      const createAttemptedAt = new Date().toISOString();
       await mutateBatchJobs((latestStore) => {
         const latestJob = latestStore.jobs[job.id];
         const latestGroup = latestJob?.groups?.find((candidate) => candidate.index === group.index);
         if (!latestGroup) {
-          return;
+          throw new PermanentBatchError("The local batch group disappeared before provider submission.");
         }
-        latestGroup.providerInputFileName = uploadedFile.name;
-        latestGroup.providerJobName = providerJob.name;
-        latestGroup.providerState = providerStateName(providerJob.state);
-        latestJob.state = "submitted";
-        latestJob.updatedAt = new Date().toISOString();
+        latestGroup.providerCreateAttemptedAt = createAttemptedAt;
+        latestJob.updatedAt = createAttemptedAt;
       });
+      group.providerCreateAttemptedAt = createAttemptedAt;
+
+      const providerJob = await client.batches.create({
+        model: modelConfig.apiModel,
+        src: providerInputFileName,
+        config: {
+          displayName
+        }
+      });
+      providerJobsByDisplayName.set(displayName, providerJob);
+      await attachProviderBatchJob(job, group, providerJob, providerInputFileName);
       await setAnimalBatchState(group.animalIds, job.id, "submitted");
     } catch (error) {
+      if (isRetryableBatchError(error)) {
+        throw error;
+      }
+
       await mutateBatchJobs((latestStore) => {
         const latestJob = latestStore.jobs[job.id];
         const latestGroup = latestJob?.groups?.find((candidate) => candidate.index === group.index);
@@ -1082,7 +1209,112 @@ async function submitLocalBatchJob(jobId) {
     }
   }
 
-  await finalizeLocalBatchState(job.id);
+  if (!await isBatchCancellationRequested(job.id)) {
+    await finalizeLocalBatchState(job.id);
+  }
+}
+
+async function isBatchCancellationRequested(jobId) {
+  const store = await readBatchJobs();
+  return Boolean(store.jobs[jobId]?.cancelRequested);
+}
+
+async function listProviderBatchesByDisplayName(client) {
+  const jobsByDisplayName = new Map();
+  const pager = await client.batches.list({ config: { pageSize: 100 } });
+  for await (const providerJob of pager) {
+    const displayName = String(providerJob?.displayName || "").trim();
+    if (!displayName) {
+      continue;
+    }
+
+    const existing = jobsByDisplayName.get(displayName);
+    if (!existing || String(providerJob.updateTime || providerJob.createTime || "") > String(existing.updateTime || existing.createTime || "")) {
+      jobsByDisplayName.set(displayName, providerJob);
+    }
+  }
+  return jobsByDisplayName;
+}
+
+async function attachProviderBatchJob(job, group, providerJob, providerInputFileName) {
+  if (!providerJob?.name) {
+    throw new PermanentBatchError("Gemini returned a batch job without a provider name.");
+  }
+
+  await mutateBatchJobs((latestStore) => {
+    const latestJob = latestStore.jobs[job.id];
+    const latestGroup = latestJob?.groups?.find((candidate) => candidate.index === group.index);
+    if (!latestGroup) {
+      return;
+    }
+    latestGroup.providerDisplayName = group.providerDisplayName || providerBatchDisplayName(job.id, group.index);
+    latestGroup.providerInputFileName = providerInputFileName || providerJob.src?.fileName || latestGroup.providerInputFileName;
+    latestGroup.providerJobName = providerJob.name;
+    latestGroup.providerState = providerStateName(providerJob.state);
+    latestJob.state = "submitted";
+    latestJob.updatedAt = new Date().toISOString();
+  });
+}
+
+async function writeBatchGroupJsonl(job, group, recordsById, batchFilePath) {
+  const fileHandle = await fs.open(batchFilePath, "w");
+  const includedIds = [];
+  let writtenBytes = 0;
+  let splitGroup = null;
+
+  try {
+    for (let index = 0; index < group.animalIds.length; index += 1) {
+      const animalId = group.animalIds[index];
+      const animal = recordsById.get(animalId);
+      if (!animal || animal.sourceHash !== job.sourceHashes[animalId]) {
+        throw new PermanentBatchError(`Source image ${animalId} changed or is no longer available.`);
+      }
+
+      const normalizedImage = await normalizeImageForGemini(animal.sourcePath);
+      const metadata = await sharp(normalizedImage).metadata();
+      const line = `${JSON.stringify(buildGeminiBatchRequest({
+        key: animal.id,
+        prompt: BACKGROUND_REMOVAL_PROMPT,
+        imageBase64: normalizedImage.toString("base64"),
+        aspectRatio: closestAspectRatio(metadata.width || 1, metadata.height || 1)
+      }))}\n`;
+      const lineBytes = Buffer.byteLength(line);
+      if (lineBytes > BATCH_MAX_INPUT_BYTES) {
+        throw new PermanentBatchError(`Image ${animal.id} is too large for one Gemini batch input file.`);
+      }
+
+      if (writtenBytes + lineBytes > BATCH_MAX_INPUT_BYTES && includedIds.length > 0) {
+        const remainingIds = group.animalIds.slice(index);
+        splitGroup = await splitLocalBatchGroup(job, group, includedIds, remainingIds);
+        group.animalIds = [...includedIds];
+        break;
+      }
+
+      await fileHandle.write(line, null, "utf8");
+      includedIds.push(animal.id);
+      writtenBytes += lineBytes;
+    }
+  } finally {
+    await fileHandle.close();
+  }
+
+  return splitGroup;
+}
+
+async function splitLocalBatchGroup(job, group, includedIds, remainingIds) {
+  const nextIndex = Math.max(-1, ...job.groups.map((candidate) => Number(candidate.index))) + 1;
+  const splitGroup = createBatchGroup(job.id, nextIndex, remainingIds);
+  await mutateBatchJobs((store) => {
+    const latestJob = store.jobs[job.id];
+    const latestGroup = latestJob?.groups?.find((candidate) => candidate.index === group.index);
+    if (!latestJob || !latestGroup) {
+      throw new PermanentBatchError("The local batch group disappeared while its input file was being prepared.");
+    }
+    latestGroup.animalIds = [...includedIds];
+    latestJob.groups.push(splitGroup);
+    latestJob.updatedAt = new Date().toISOString();
+  });
+  return splitGroup;
 }
 
 async function refreshLocalBatchJob(jobId) {
@@ -1092,7 +1324,7 @@ async function refreshLocalBatchJob(jobId) {
     return;
   }
 
-  if (job.state === "preparing") {
+  if (hasUnsubmittedBatchGroups(job)) {
     await submitLocalBatchJob(jobId);
     return;
   }
@@ -1117,6 +1349,7 @@ async function refreshLocalBatchJob(jobId) {
     });
 
     if (providerState === PROVIDER_SUCCESS_STATE) {
+      await setAnimalBatchState(group.animalIds, job.id, "importing");
       await importBatchGroup(job.id, group.index, providerJob);
     } else if (isProviderFailureState(providerState)) {
       const message = batchErrorMessage(providerJob.error || `Gemini batch ended with ${providerState}.`);
@@ -1130,6 +1363,9 @@ async function refreshLocalBatchJob(jobId) {
         }
       });
       await setAnimalBatchState(group.animalIds, job.id, "error", message);
+    } else {
+      const animalState = providerState === "JOB_STATE_PENDING" ? "submitted" : "running";
+      await setAnimalBatchState(group.animalIds, job.id, animalState);
     }
   }
 
@@ -1185,7 +1421,7 @@ async function importBatchGroup(jobId, groupIndex, providerJob) {
       try {
         const cacheEntry = await createBatchProcessedEntry(animal, job.model, result.buffer);
         await mutateCache((cache) => {
-          cache.animals[animal.id] = cacheEntry;
+          replaceProcessedCacheEntry(cache, animal.id, cacheEntry);
         });
         importedCount += 1;
       } catch (error) {
@@ -1250,11 +1486,17 @@ async function finalizeLocalBatchState(jobId) {
 
     const finished = job.groups.every((group) => group.imported || group.error);
     const anySubmitted = job.groups.some((group) => group.providerJobName);
+    const anyImporting = job.groups.some((group) => group.providerState === PROVIDER_SUCCESS_STATE && !group.imported && !group.error);
+    const anyRunning = job.groups.some((group) => !group.imported && !group.error && ![null, "JOB_STATE_PENDING"].includes(group.providerState));
     const imported = job.groups.reduce((sum, group) => sum + Number(group.importedCount || 0), 0);
     const failed = job.groups.reduce((sum, group) => sum + Number(group.failedCount || 0), 0);
     if (finished) {
       job.state = failed === 0 ? "succeeded" : imported > 0 ? "partial" : "failed";
       job.error = failed > 0 ? `${failed} image${failed === 1 ? "" : "s"} failed during batch processing.` : null;
+    } else if (anyImporting) {
+      job.state = "importing";
+    } else if (anyRunning) {
+      job.state = "running";
     } else if (anySubmitted) {
       job.state = "submitted";
     } else {
@@ -1267,41 +1509,105 @@ async function finalizeLocalBatchState(jobId) {
 
 async function cancelLocalBatchJob(jobId) {
   const store = await readBatchJobs();
-  const job = store.jobs[jobId];
-  if (!job) {
+  let job = store.jobs[jobId];
+  if (!job || ["succeeded", "partial", "failed", "cancelled"].includes(job.state)) {
     return;
   }
 
   const client = getGeminiClient();
+  const uncertainGroups = job.groups.filter((group) => (
+    !group.providerJobName && group.providerCreateAttemptedAt && !group.error
+  ));
+  if (uncertainGroups.length > 0) {
+    const providerJobsByDisplayName = await listProviderBatchesByDisplayName(client);
+    for (const group of uncertainGroups) {
+      const displayName = group.providerDisplayName || providerBatchDisplayName(job.id, group.index);
+      const recoveredJob = providerJobsByDisplayName.get(displayName);
+      if (recoveredJob) {
+        await attachProviderBatchJob(job, group, recoveredJob, group.providerInputFileName);
+      }
+    }
+
+    job = (await readBatchJobs()).jobs[jobId];
+    if (job.groups.some((group) => !group.providerJobName && group.providerCreateAttemptedAt && !group.error)) {
+      const uncertainError = new Error(
+        "A Gemini create attempt is still being reconciled; cancellation will retry without submitting more work."
+      );
+      uncertainError.code = "BATCH_CREATE_UNCERTAIN";
+      throw uncertainError;
+    }
+  }
+
+  const cancellationErrors = [];
   for (const group of job.groups) {
     if (group.providerJobName && !isProviderTerminalState(group.providerState)) {
-      await client.batches.cancel({ name: group.providerJobName });
+      try {
+        const providerJob = await client.batches.get({ name: group.providerJobName });
+        const providerState = providerStateName(providerJob.state);
+        await mutateBatchJobs((latestStore) => {
+          const latestGroup = latestStore.jobs[jobId]?.groups?.find((candidate) => candidate.index === group.index);
+          if (latestGroup) {
+            latestGroup.providerState = providerState;
+          }
+        });
+        if (!isProviderTerminalState(providerState)) {
+          await client.batches.cancel({ name: group.providerJobName });
+        }
+      } catch (error) {
+        cancellationErrors.push(error);
+      }
     }
+  }
+  if (cancellationErrors.length > 0) {
+    throw cancellationErrors[0];
   }
 
   await mutateBatchJobs((latestStore) => {
     const latestJob = latestStore.jobs[jobId];
     if (latestJob) {
       latestJob.state = "cancelled";
+      latestJob.cancelRequested = false;
+      latestJob.error = null;
       latestJob.updatedAt = new Date().toISOString();
     }
   });
   await setAnimalBatchState(job.animalIds, job.id, "cancelled", "Batch processing was cancelled.");
 }
 
-async function resumeBatchJobs() {
+async function resumeBatchJobs({ waitForTasks = false } = {}) {
   if (!GEMINI_API_KEY) {
-    return;
+    return [];
   }
 
   const store = await readBatchJobs();
+  const tasks = [];
   for (const job of Object.values(store.jobs)) {
-    if (["preparing", "submitted", "running", "importing"].includes(job.state)) {
-      queueBatchTask(job.id, () => (
-        job.state === "preparing" ? submitLocalBatchJob(job.id) : refreshLocalBatchJob(job.id)
-      ));
+    const retryAt = Date.parse(job.nextRetryAt || "");
+    if (
+      ["preparing", "submitted", "running", "importing"].includes(job.state)
+      && (!Number.isFinite(retryAt) || retryAt <= Date.now())
+    ) {
+      tasks.push(queueBatchTask(job.id, () => (
+        job.cancelRequested
+          ? cancelLocalBatchJob(job.id)
+          : hasUnsubmittedBatchGroups(job) ? submitLocalBatchJob(job.id) : refreshLocalBatchJob(job.id)
+      )));
     }
   }
+  if (waitForTasks) {
+    await Promise.all(tasks);
+  }
+  return tasks;
+}
+
+function replaceProcessedCacheEntry(cache, animalId, entry) {
+  cache.animals[animalId] = {
+    ...(cache.animals[animalId] || {}),
+    ...entry
+  };
+  delete cache.animals[animalId].batchJobId;
+  delete cache.animals[animalId].batchStatus;
+  delete cache.animals[animalId].batchError;
 }
 
 function startBatchMonitor() {
@@ -1324,7 +1630,7 @@ async function normalizeImageForGemini(sourcePath) {
     .toBuffer();
 }
 
-async function processAnimal(animal, cache, processModel = DEFAULT_PROCESS_MODEL) {
+async function processAnimal(animal, processModel = DEFAULT_PROCESS_MODEL) {
   const modelConfig = PROCESS_MODELS[processModel] || PROCESS_MODELS[DEFAULT_PROCESS_MODEL];
   const maskFileName = maskFilename(animal.sourceRelPath);
   const maskPath = path.join(MASKS_DIR, maskFileName);
@@ -1343,15 +1649,13 @@ async function processAnimal(animal, cache, processModel = DEFAULT_PROCESS_MODEL
     updatedAt: new Date().toISOString()
   };
 
-  cache.animals[animal.id] = baseEntry;
-
   try {
     const normalizedImage = await normalizeImageForGemini(animal.sourcePath);
 
     const cutout = await removeBackgroundWithGemini(normalizedImage, processModel);
     await fs.writeFile(maskPath, cutout.buffer);
     const colors = await assignSearchableColors(animal.sourcePath, maskPath, cutout.buffer);
-    cache.animals[animal.id] = {
+    return {
       ...baseEntry,
       estimatedCostUsd: cutout.estimatedCostUsd,
       transparency: cutout.transparency,
@@ -1361,7 +1665,7 @@ async function processAnimal(animal, cache, processModel = DEFAULT_PROCESS_MODEL
       updatedAt: new Date().toISOString()
     };
   } catch (error) {
-    cache.animals[animal.id] = {
+    return {
       ...baseEntry,
       status: "error",
       error: error.message || "Processing failed.",
@@ -1370,26 +1674,28 @@ async function processAnimal(animal, cache, processModel = DEFAULT_PROCESS_MODEL
   }
 }
 
-async function recolorAnimal(animal, cache) {
+async function recolorAnimal(animal) {
   if (!animal.maskPath || !fsSync.existsSync(animal.maskPath)) {
     throw new Error(`${animal.name} does not have a mask to recolor.`);
   }
 
-  const existingEntry = cache.animals[animal.id] || {};
   const maskBuffer = await fs.readFile(animal.maskPath);
   const colors = await assignSearchableColors(animal.sourcePath, animal.maskPath, maskBuffer);
-  cache.animals[animal.id] = {
-    ...existingEntry,
-    sourceRelPath: animal.sourceRelPath,
-    sourceHash: animal.sourceHash,
-    maskRelPath: animal.maskRelPath || existingEntry.maskRelPath,
-    colors,
-    colorSource: "auto",
-    status: "processed",
-    error: null,
-    updatedAt: new Date().toISOString()
-  };
-  delete cache.animals[animal.id].qualityReview;
+  await mutateCache((cache) => {
+    const existingEntry = cache.animals[animal.id] || {};
+    cache.animals[animal.id] = {
+      ...existingEntry,
+      sourceRelPath: animal.sourceRelPath,
+      sourceHash: animal.sourceHash,
+      maskRelPath: animal.maskRelPath || existingEntry.maskRelPath,
+      colors,
+      colorSource: "auto",
+      status: "processed",
+      error: null,
+      updatedAt: new Date().toISOString()
+    };
+    delete cache.animals[animal.id].qualityReview;
+  });
 }
 
 async function removeBackgroundWithGemini(imageBuffer, processModel) {
@@ -2641,6 +2947,11 @@ function uniqueUploadName(originalName, mimeType) {
   return `${safeBase}-${suffix}${ext}`;
 }
 
+function configuredPath(environmentVariable, fallbackPath) {
+  const configured = String(process.env[environmentVariable] || "").trim();
+  return configured ? path.resolve(configured) : fallbackPath;
+}
+
 function normalizeRelPath(value) {
   return value.split(path.sep).join("/");
 }
@@ -2654,4 +2965,25 @@ function trimOutput(value) {
   return text.length > 800 ? `${text.slice(0, 800)}...` : text;
 }
 
-export { app, assignSearchableColors, parseMetadataCsv, removeWhiteEdgeMatte };
+function setGeminiClientForTesting(client) {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("Gemini client injection is only available when NODE_ENV=test.");
+  }
+  geminiClient = client;
+}
+
+async function runBatchMonitorOnceForTesting() {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("Direct batch monitor execution is only available when NODE_ENV=test.");
+  }
+  return resumeBatchJobs({ waitForTasks: true });
+}
+
+export {
+  app,
+  assignSearchableColors,
+  parseMetadataCsv,
+  removeWhiteEdgeMatte,
+  runBatchMonitorOnceForTesting,
+  setGeminiClientForTesting
+};

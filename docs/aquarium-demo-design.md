@@ -134,7 +134,7 @@ Decision 2: how is the work submitted?
 
 Both modes are available in the Process panel. Standard sends immediate Gemini Interactions requests. Batch creates asynchronous Gemini `generateContent` jobs, stores their provider job IDs locally, and imports each completed image through the same matte cleanup, mask storage, and color extraction used by standard processing. The submission mode does not intentionally lower image quality; using the same model and settings should produce comparable, though not pixel-identical, results.
 
-Batch delivery is automatic rather than email-based. Gemini exposes a completed results file; the running server downloads it, saves the returned masks in `data/masks/`, updates searchable colors in `data/color-cache.json`, and shows ready and failed counts in the Process panel. Restarting the server resumes this import workflow from the saved local batch-job metadata.
+Batch delivery is automatic rather than email-based. Gemini exposes a completed results file; the running server downloads it, saves the returned masks in `data/masks/`, updates searchable colors in `data/color-cache.json`, and shows ready and failed counts for every active batch in the Process panel. Restarting the server resumes this import workflow from saved local metadata and reconciles deterministic provider display names. A create call with an uncertain outcome is never automatically repeated, avoiding a duplicate charged submission. Temporary provider failures use bounded retries, while exhausted retries release affected images into an explicit failed state.
 
 The cost scenarios combine one model choice with one submission mode.
 
@@ -170,7 +170,7 @@ The main production changes would be:
 - database instead of local JSON
 - cloud storage instead of local folders
 - move local batch-job metadata and files to managed cloud job storage
-- progress tracking and retries
+- managed progress observability, alerting, and a dead-letter review queue
 - confidence scores for color quality
 - review queue only for low-confidence images
 - filters by animal group, habitat, exhibit, or collection

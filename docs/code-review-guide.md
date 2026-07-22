@@ -59,6 +59,8 @@ Useful checks:
 
 `node --check public/app.js`
 
+`node --check batch-processing.js`
+
 `npm audit --omit=dev`
 
 
@@ -67,6 +69,10 @@ Main Files
 `server.js`
 
 Backend server. Handles API routes, image upload, folder scanning, Gemini cutout generation, color extraction, metadata import, search ranking, and cache writes.
+
+`batch-processing.js`
+
+Pure helpers for Gemini Batch request construction, result parsing, retry classification, provider display names, unfinished-image tracking, and public job summaries.
 
 `public/app.js`
 
@@ -84,6 +90,10 @@ Layout and styling for the sidebar, review area, color search controls, and gall
 
 Local JSON cache. This acts like the demo database.
 
+`data/batch-jobs.json`
+
+Ignored local persistence for batch groups, deterministic provider identifiers, retry state, import counts, and cancellation state.
+
 `animals/`
 
 Original image library.
@@ -95,7 +105,7 @@ Background-removed subject-mask PNGs named after their originals, such as `Anima
 
 Data Storage
 
-The demo does not use a database. It uses local folders plus `data/color-cache.json`.
+The demo does not use a database. It uses local folders plus `data/color-cache.json` and the ignored `data/batch-jobs.json` runtime store.
 
 The original image files stay in `animals/`. The JSON cache explicitly links each original to its generated internal subject mask.
 
@@ -108,7 +118,7 @@ Each cache entry stores:
 - `sourceHash`: full SHA-256 fingerprint of the original file bytes, used to detect content changes even when the filename is unchanged
 - `backgroundModel`: application processing mode, such as `gemini-lite` or `gemini-flash`
 - `backgroundModelName`: exact Gemini API model name used for the mask
-- `processingProvider`: currently `gemini`
+- `processingProvider`: `gemini` for immediate processing or `gemini-batch` for imported batch results
 - `estimatedCostUsd`: estimated output-image cost, not a billing receipt
 - `transparency`: result of mask preparation, such as native alpha, white-matte cleanup, or opaque output
 - `colors`: saved searchable hex colors
@@ -117,6 +127,7 @@ Each cache entry stores:
 - `updatedAt`: last update timestamp
 - `error`: processing error message when something fails
 - `qualityReview`: optional manual review state
+- `batchJobId`, `batchStatus`, and `batchError`: temporary batch lifecycle fields removed after a successful import
 
 The stable ID and `sourceHash` answer different questions:
 
@@ -197,6 +208,14 @@ Processing steps:
 Standard processing remains sequential and writes the cache after every animal so progress is not lost if a later image fails. The optional Batch submission mode groups large libraries into asynchronous Gemini Batch jobs. Completed batch images return to the same local cutout preparation and color extraction functions, so submission mode does not create a separate image-quality pipeline.
 
 Batch job state is persisted in ignored `data/batch-jobs.json`. The server resumes active jobs after restart, polls Gemini, downloads completed JSONL results, maps each result to the stable animal ID, and records failures per image. The default group size is 100 requests to keep a 1,200-image run manageable.
+
+Each provider group has a deterministic display name. Before creating a remote job, restart recovery lists existing Gemini jobs and reconnects a matching display name. Uploaded input file names and a create-attempt marker are persisted before the non-idempotent create operation. If that operation has an uncertain outcome, automatic recovery only retries reconciliation; it does not issue another create call that could incur a duplicate charge.
+
+Unexpected provider, polling, download, or import failures use bounded exponential retries. If the retry budget is exhausted, every unfinished group and animal is moved to an explicit error state instead of remaining stuck as queued or running. Cancellation is cooperative during submission and is retried when a provider cancellation temporarily fails.
+
+Immediate processing rejects explicitly selected animals in an active batch and excludes active-batch animals from its process-all path. The frontend mirrors that rule by disabling their processing checkboxes and active-animal button.
+
+All `data/color-cache.json` writes share one serialized mutation queue. Batch imports merge into the latest cache entry so unrelated concurrent fields, such as a quality review, are not lost. Batch JSONL is streamed to disk and groups are split by both request count and configured file size.
 
 There is no separate email or manual-download delivery step. After Gemini reports success, the server downloads the provider results file, decodes each returned image, writes the subject mask to `data/masks/`, runs the normal color extraction, and updates `data/color-cache.json`. The frontend reflects those imported records as ready or failed. The Node server must be running for automatic polling and import; if it was stopped, restarting it resumes work from `data/batch-jobs.json`.
 
@@ -468,7 +487,7 @@ Known MVP Limitations
 - JSON file instead of database
 - no authentication
 - standard processing is sequential; large runs require the asynchronous Batch option
-- targeted automated coverage for color extraction only; most server and frontend flows still rely on manual checks
+- automated helper, image-pipeline, metadata, frontend contract, and fake-provider batch lifecycle coverage; full visual browser review still remains manual
 - Gemini output quality can vary
 - color extraction is heuristic
 - cost tracking is estimated, not exact billing

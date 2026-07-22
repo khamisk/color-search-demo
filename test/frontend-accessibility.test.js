@@ -28,7 +28,7 @@ test("frontend displays originals and treats subject masks as internal workflow 
   assert.doesNotMatch(serverSource, /app\.use\("\/(?:processed|thumbs|masks)"/);
 });
 
-test("batch processing is an explicit optional submission mode", async () => {
+test("batch processing is an explicit optional submission mode with multi-job status", async () => {
   const [html, appSource, serverSource] = await Promise.all([
     readFile(new URL("../public/index.html", import.meta.url), "utf8"),
     readFile(new URL("../public/app.js", import.meta.url), "utf8"),
@@ -38,7 +38,13 @@ test("batch processing is an explicit optional submission mode", async () => {
   assert.match(html, /id="processing-mode-select"/);
   assert.match(html, /value="standard" selected/);
   assert.match(html, /value="batch"/);
+  assert.match(html, /id="batch-job-list"/);
+  assert.match(html, /aria-live="polite"/);
   assert.match(appSource, /requestJson\("\/api\/process-batches"/);
+  assert.match(appSource, /activeBatchIds: new Set\(\)/);
+  assert.match(appSource, /data-cancel-batch-id/);
+  assert.match(appSource, /processDisclosure\.open = true/);
+  assert.doesNotMatch(appSource, /activeBatchId: null/);
   assert.match(serverSource, /app\.post\("\/api\/process-batches"/);
   assert.match(serverSource, /processingProvider: "gemini-batch"/);
 });
