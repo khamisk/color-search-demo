@@ -1,12 +1,10 @@
 # Engineering the Gemini Cutout Prompt
 
-This document explains how the Gemini background-removal prompt was shaped, what problems each part solves, and why the current result depends on both prompt design and deterministic image post-processing.
+This document explains the design of the Gemini background-removal prompt, what problems each part solves, and why the result depends on both prompt design and deterministic image post-processing.
 
-> **History note:** The production prompt entered the repository as one block, so there is no commit-by-commit prompt history to recover. The intermediate prompts below are illustrative reconstructions based on the failure modes documented in the project and visible in the current implementation. They show the reasoning path; they are not presented as verbatim historical prompts.
+## Prompt design overview
 
-## Presentation-ready narrative
-
-This section follows the requested presentation structure: considerations, design outcomes, working backward from those outcomes, three prompt versions, and a breakdown of the final version. It is written so it can be read almost word for word.
+This section connects the desired product outcome to the prompt requirements, compares increasingly specific prompt designs, and breaks down the final version.
 
 ### 1. What were we trying to build?
 
@@ -27,9 +25,9 @@ A design outcome describes what the final result must accomplish. A consideratio
 | Produce usable transparency | The image API may return an opaque image instead of dependable alpha transparency. |
 | Preserve accurate searchable colors | A generated cutout may shift colors slightly, even when its shape is useful. |
 
-### 3. How we worked backward from the outcome
+### 3. Work backward from the outcome
 
-> We worked backward from the final color-search experience.
+> Start with the final color-search experience.
 >
 > Reliable search required accurate colors. Accurate colors required knowing which pixels belonged to the animal. That required a reliable subject mask. The background-removed image became that mask.
 >
@@ -48,8 +46,6 @@ Reliable color search
 
 ### 4. Prompt version 1: basic instruction
 
-This is an approximate reconstruction, not a verbatim historical prompt.
-
 ```text
 Remove the background from this image.
 ```
@@ -67,8 +63,6 @@ Likely problems included:
 **Learning:** Saying what to remove was not enough. We also needed to say what must survive.
 
 ### 5. Prompt version 2: preservation and transparency
-
-This is also an approximate reconstruction. It combines a few intermediate ideas into one readable version.
 
 ```text
 Remove the background and return a transparent cutout.
@@ -104,7 +98,7 @@ The area outside the organism must be a flat pure #FFFFFF background with no gra
 
 ### 7. Breakdown of the final prompt
 
-Each part of the final prompt addresses a consideration identified earlier.
+Each part of the final prompt addresses a specific design consideration.
 
 | Final prompt section | Consideration it addresses | Intended outcome |
 | --- | --- | --- |
@@ -126,11 +120,7 @@ Each part of the final prompt addresses a consideration identified earlier.
 
 ### 9. Closing takeaway
 
-> The prompt improved because every new section addressed a specific observed failure. The solution did not improve simply because the prompt became longer.
-
-When presenting the earlier versions, disclose that they are approximate reconstructions:
-
-> The first two prompts are rough reconstructions based on the problems we encountered. The third prompt is the final version currently used in the application.
+> The final prompt is effective because every section addresses a specific failure mode. Its strength comes from clearer constraints, not simply from being longer.
 
 ---
 
@@ -178,15 +168,11 @@ The area outside the organism must be a flat pure #FFFFFF background with no gra
 
 The ordering gives the model task and output context first, then preservation and framing requirements, then prohibited edits, and finally the background/matte constraint. This makes the instruction easier to read as one edit specification rather than as an unstructured list of negatives.
 
-### Reconstructed iteration path
+### Prompt design progression
 
-#### Iteration 0: local background removal
+The following progression shows how adding explicit requirements turns a vague request into a testable prompt-and-code contract.
 
-Before the Gemini path, the first local approach was too aggressive on detailed organisms. Coral branches, soft edges, and fine animal detail could be washed out or removed. That established the key product requirement: a clean silhouette is not a success if biological detail is lost.
-
-The intended advantage of moving to an image-editing model was better semantic separation of organism and habitat. It also introduced generative behavior that had to be constrained.
-
-#### Iteration 1: the one-line instruction
+#### Stage 1: the one-line instruction
 
 ```text
 Remove the background from this image.
@@ -194,7 +180,7 @@ Remove the background from this image.
 
 This identifies the action but leaves almost every important decision to the model. "Background" is ambiguous in aquarium photography: rock may touch a coral, water can show through translucent fins, and substrate may share the animal's color. It also says nothing about cropping, fidelity, output format, or whether the model may repair the subject.
 
-Representative failures:
+Likely failure modes:
 
 - thin anatomy disappears with the background;
 - rock or water remains near the subject boundary;
@@ -203,7 +189,7 @@ Representative failures:
 
 **Lesson:** State the preservation goal, not just the removal action.
 
-#### Iteration 2: ask for transparency and preservation
+#### Stage 2: ask for transparency and preservation
 
 ```text
 Remove the background and return a transparent cutout. Preserve the entire animal and all fine details. Do not crop it.
@@ -215,7 +201,7 @@ Transparency was also not dependable. The current API call requests JPEG output,
 
 **Lesson:** Name fragile structures explicitly, forbid unwanted transformations, and design for the output format actually returned by the API.
 
-#### Iteration 3: define what must survive and what must go
+#### Stage 3: define what must survive and what must go
 
 ```text
 Preserve all branches, fins, tentacles, legs, hair, shell, texture, markings, translucency, and natural color. Do not crop, blur, smooth, relight, recolor, stylize, simplify, or reconstruct the subject. Remove water, rock, sand, substrate, aquarium glass, scenery, labels, shadows, backdrops, and watermark text.
@@ -230,7 +216,7 @@ The remaining problem is the handoff to software. A visually plain background ca
 
 **Lesson:** The model output needs a deterministic intermediate state, not merely a visually acceptable background.
 
-#### Iteration 4: the current prompt and the white-matte contract
+#### Stage 4: the current prompt and the white-matte contract
 
 The final version adds two output ideas:
 
@@ -242,7 +228,7 @@ Read in isolation, "transparent PNG" and "pure `#FFFFFF` background" appear cont
 - if Gemini returns useful alpha, the app keeps it;
 - if Gemini returns an opaque result, pure white gives the app a predictable matte to remove.
 
-Because the API currently requests JPEG, the second path is the normal one. In the local cache snapshot checked on July 15, 2026, 21 of the 22 Gemini entries with transparency tracking were stored as `post-processed-white-edge`; one was recorded as `opaque-output`. That makes the white background a core part of the design, not an unusual fallback.
+Because the API currently requests JPEG, the white-matte path is expected rather than exceptional. The white background is therefore a core part of the design.
 
 **Lesson:** Prompt for the ideal output, but also constrain the most likely fallback into a form that deterministic code can validate and repair.
 
@@ -281,7 +267,7 @@ Three current images illustrate the edge cases behind these rules:
 - The Doctorfish has substantial white and silver body detail, making it a useful case for source-aware white-matte cleanup.
 - The Pacific false coral fills almost the entire frame and is recorded as `opaque-output`; there is very little obvious background to separate. It is a reminder that a constrained prompt can expose an ambiguous input, but cannot always resolve it.
 
-### Problems encountered and the corresponding guardrails
+### Failure modes and corresponding guardrails
 
 | Problem | Prompt guardrail | Code guardrail |
 | --- | --- | --- |

@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="1170" viewBox="0 0 2048 1170" role="img" aria-labelledby="title description">
+  <title id="title">Image Processing and Color Search</title>
+  <desc id="description">New animal images are processed once to create a cutout and mask. Colors sampled from the original image inside the mask are saved with image references. Live searches compare a selected color with the saved colors and return the closest animals without reprocessing images.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 Z" fill="#5d6d7d"/>
+    </marker>
+    <style>
+      .title { fill: #132538; font: 700 50px Arial, sans-serif; }
+      .section { fill: #667788; font: 700 19px Arial, sans-serif; letter-spacing: 3px; }
+      .heading { fill: #132538; font: 700 28px Arial, sans-serif; }
+      .support { fill: #6b7b8a; font: 20px Arial, sans-serif; }
+      .label { fill: #667788; font: 700 17px Arial, sans-serif; }
+      .flow { fill: none; stroke: #5d6d7d; stroke-width: 4; marker-end: url(#arrow); }
+      .branch { fill: none; stroke: #5d6d7d; stroke-width: 4; }
+      .neutral { fill: #ffffff; stroke: #81909e; stroke-width: 3; }
+      .storage { fill: #f5f6f7; stroke: #5d6d7d; stroke-width: 3; }
+      .process { fill: #f3fafb; stroke: #18899a; stroke-width: 3; }
+      .search { fill: #fff9f0; stroke: #bd7408; stroke-width: 3; }
+    </style>
+  </defs>
+
+  <rect width="2048" height="1170" fill="#ffffff"/>
+
+  <text class="title" x="102" y="97">Image Processing and Color Search</text>
+  <line x1="102" y1="152" x2="1945" y2="152" stroke="#d9e0e5" stroke-width="2"/>
+
+  <text class="section" x="102" y="246">IMAGE PREPARATION</text>
+
+  <rect class="neutral" x="130" y="295" width="354" height="153" rx="8"/>
+  <text class="heading" x="166" y="353">Unprocessed image</text>
+  <text class="support" x="166" y="395">Original animal photo</text>
+  <text class="support" x="166" y="426">animals/</text>
+
+  <path class="flow" d="M 484 372 H 643"/>
+
+  <rect class="process" x="643" y="295" width="353" height="153" rx="8"/>
+  <text class="heading" x="678" y="353">Image processing</text>
+  <text class="support" x="678" y="395">Background removal</text>
+  <text class="support" x="678" y="426">Gemini</text>
+
+  <path class="flow" d="M 996 372 H 1155"/>
+
+  <rect class="neutral" x="1155" y="295" width="354" height="153" rx="8"/>
+  <text class="heading" x="1191" y="353">Processed cutout</text>
+  <text class="support" x="1191" y="395">Clean preview + mask</text>
+  <text class="support" x="1191" y="426">data/processed/</text>
+
+  <path class="branch" d="M 307 448 V 515 H 980"/>
+  <path class="flow" d="M 980 515 V 570"/>
+  <text class="label" x="520" y="503">ORIGINAL PIXELS</text>
+
+  <path class="branch" d="M 1332 448 V 515 H 1169"/>
+  <path class="flow" d="M 1169 515 V 570"/>
+  <text class="label" x="1199" y="503">MASK</text>
+
+  <rect class="process" x="899" y="570" width="354" height="153" rx="8"/>
+  <text class="heading" x="935" y="628">Color extraction</text>
+  <text class="support" x="935" y="670">Sample original pixels</text>
+  <text class="support" x="935" y="701">inside the mask</text>
+
+  <path class="flow" d="M 1253 646 H 1498"/>
+  <text class="label" x="1308" y="632">SAVED COLORS</text>
+
+  <rect class="storage" x="1498" y="570" width="397" height="153" rx="8"/>
+  <text class="heading" x="1534" y="628">Color database</text>
+  <text class="support" x="1534" y="670">Saved colors + image references</text>
+  <text class="support" x="1534" y="701">Demo: color-cache.json</text>
+
+  <line x1="102" y1="798" x2="1945" y2="798" stroke="#d9e0e5" stroke-width="2"/>
+  <text class="section" x="102" y="860">LIVE SEARCH | NO IMAGE REPROCESSING</text>
+
+  <path class="branch" d="M 1697 723 V 834 H 950"/>
+  <path class="flow" d="M 950 834 V 909"/>
+  <text class="label" x="1208" y="822">SAVED COLORS + IMAGE REFERENCES</text>
+
+  <rect class="search" x="130" y="909" width="354" height="153" rx="8"/>
+  <text class="heading" x="166" y="967">Selected color</text>
+  <text class="support" x="166" y="1009">Swatch, wheel, RGB, or hex</text>
+
+  <path class="flow" d="M 484 986 H 775"/>
+
+  <rect class="search" x="775" y="909" width="354" height="153" rx="8"/>
+  <text class="heading" x="810" y="967">Search</text>
+  <text class="support" x="810" y="1009">Compare with saved colors</text>
+  <text class="support" x="810" y="1040">Rank by similarity</text>
+
+  <path class="flow" d="M 1129 986 H 1418"/>
+
+  <rect class="search" x="1418" y="909" width="354" height="153" rx="8"/>
+  <text class="heading" x="1454" y="967">Results</text>
+  <text class="support" x="1454" y="1009">Closest animals first</text>
+</svg>
